@@ -101,3 +101,46 @@ html.night-mode main {
 .night-mode .shadow-lg {
   box-shadow: 0 12px 30px rgb(0 0 0 / 0.18) !important;
 }
+
+/* Opening screen stays on brand in both themes. */
+html main.app-opening {
+  min-height: 100svh;
+  display: grid;
+  place-items: center;
+  padding: 32px 24px;
+  background: radial-gradient(ellipse at 50% 30%, #b73526, #9d1f16 52%, #63130e) !important;
+  color: #fff !important;
+  text-align: center;
+}
+
+.app-opening-content {
+  width: min(100%, 420px);
+  animation: opening-arrive 650ms ease-out both;
+}
+
+.app-opening-logo {
+  display: inline-grid;
+  place-items: center;
+  width: 136px;
+  height: 136px;
+  border: 1px solid rgb(255 255 255 / 18%);
+  border-radius: 36px;
+  background: rgb(255 255 255 / 6%);
+  box-shadow: 0 20px 60px rgb(52 3 0 / 18%);
+}
+
+.app-opening-logo img { border-radius: 28px; }
+.app-opening-eyebrow { margin-top: 32px; color: #ffe89a; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase; }
+.app-opening h1 { margin-top: 12px; font-size: clamp(2.75rem, 12vw, 4.5rem); font-weight: 900; letter-spacing: -0.045em; line-height: 1; }
+.app-opening h1 span { display: block; margin-top: 6px; color: #f3c400; }
+.app-opening-description { margin: 24px auto 0; max-width: 290px; font-size: 1rem; line-height: 1.7; color: #f9ddd9; }
+.app-opening-status { display: grid; justify-items: center; gap: 16px; margin-top: 56px; font-size: 0.875rem; color: #f9ddd9; }
+.app-opening-dots { display: flex; gap: 8px; }
+.app-opening-dots i { width: 7px; height: 7px; border-radius: 50%; background: #f3c400; animation: opening-dot 1100ms ease-in-out infinite; }
+.app-opening-dots i:nth-child(2) { animation-delay: 150ms; }
+.app-opening-dots i:nth-child(3) { animation-delay: 300ms; }
+@keyframes opening-arrive { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes opening-dot { 0%, 80%, 100% { opacity: 0.35; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-5px); } }
+@media (prefers-reduced-motion: reduce) {
+  .app-opening-content, .app-opening-dots i { animation: none; }
+}

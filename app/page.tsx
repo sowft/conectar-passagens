@@ -5,6 +5,7 @@ import CompanySearch from "@/components/CompanySearch";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import CampaignManager from "@/components/CampaignManager";
 import OperationStatus from "@/components/OperationStatus";
+import AppOpening from "@/components/AppOpening";
 import {
   Lead,
   LeadStatus,
@@ -74,6 +75,7 @@ export default function Home() {
   const [erro, setErro] = useState("");
   const [autenticado, setAutenticado] = useState(false);
   const [carregandoSessao, setCarregandoSessao] = useState(true);
+  const [aberturaConcluida, setAberturaConcluida] = useState(false);
   const [modoAcesso, setModoAcesso] = useState<"login" | "cadastro">("login");
   const [nomeCadastro, setNomeCadastro] = useState("");
   const [email, setEmail] = useState("");
@@ -85,6 +87,11 @@ export default function Home() {
   const [filtros, setFiltros] = useState<FiltrosOportunidades>(filtrosIniciais);
   const [leadSelecionado, setLeadSelecionado] = useState<Lead | null>(null);
   const [modoNoturno, setModoNoturno] = useState(false);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setAberturaConcluida(true), 1600);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   function alternarTema() {
     aplicarTema(!modoNoturno);
@@ -117,7 +124,7 @@ export default function Home() {
 
   const verificarSessao = useCallback(async () => {
     try {
-    const response = await fetch("/api/auth/me");
+    const response = await fetch("/api/auth/me", { signal: AbortSignal.timeout(8000) });
     const data = (await response.json()) as { authenticated?: boolean };
     setAutenticado(Boolean(data.authenticated));
     setCarregandoSessao(false);
@@ -138,12 +145,19 @@ export default function Home() {
       setEmail(window.localStorage.getItem("conectar-email-login") ?? "");
 
       void (async () => {
-        if (!deveManterLogin) {
-          window.localStorage.removeItem("conectar-auth-local");
-          await fetch("/api/auth/logout", { method: "POST" });
+        try {
+          if (!deveManterLogin) {
+            window.localStorage.removeItem("conectar-auth-local");
+            const response = await fetch("/api/auth/logout", { method: "POST", signal: AbortSignal.timeout(5000) });
+            if (!response.ok) throw new Error("LOGOUT_UNAVAILABLE");
+          }
+          await verificarSessao();
+        } catch {
+          // A failed logout must not leave the opening screen stuck forever.
+          setAutenticado(false);
+          setCarregandoSessao(false);
+          setErroLogin("Falha ao preparar o acesso. Tente entrar novamente.");
         }
-
-        verificarSessao();
       })();
     }, 0);
 
@@ -353,15 +367,7 @@ export default function Home() {
     ? Math.round((metricas.convertidos / leads.length) * 100)
     : 0;
 
-  if (carregandoSessao) {
-    return (
-      <main className={`grid min-h-screen place-items-center bg-[#fafaf7] px-4 text-zinc-950 ${modoNoturno ? "night-mode" : ""}`}>
-        <p className="rounded-lg bg-white px-5 py-4 text-sm font-bold shadow-sm">
-          Carregando area interna...
-        </p>
-      </main>
-    );
-  }
+  if (carregandoSessao || !aberturaConcluida) return <AppOpening />;
 
   if (!autenticado) {
     return (
