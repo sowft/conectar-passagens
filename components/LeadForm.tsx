@@ -33,8 +33,7 @@ export default function LeadForm() {
           Captar cliente interessado
         </h2>
         <p className="mt-2 text-sm leading-6 text-zinc-600">
-          Registre o contato, rota desejada e perfil para orientar o melhor
-          canal de divulgacao.
+          Registre o contato, a rota desejada e o perfil de atendimento.
         </p>
       </div>
 
@@ -107,13 +106,13 @@ export default function LeadForm() {
           type="submit"
           className="rounded-md bg-[#9d1f16] px-4 py-3 text-sm font-bold uppercase tracking-[0.16em] text-white shadow-sm transition hover:bg-[#7f190f]"
         >
-          Gerar lead
+          Registrar solicitação
         </button>
       </form>
 
       {savedLead ? (
         <p className="mt-4 rounded-md border border-[#f3c400] bg-[#fff8cc] px-3 py-2 text-sm font-semibold text-[#4b3200]">
-          Lead criado para demonstracao: {savedLead}
+          Oportunidade registrada: {savedLead}
         </p>
       ) : null}
     </section>

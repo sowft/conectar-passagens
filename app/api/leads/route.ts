@@ -1,0 +1,105 @@
+import { captureLead } from "@/lib/intake";
+import { isAuthenticated } from "@/lib/session";
+import { LeadStatus, statusOrder } from "@/lib/leads";
+import { database } from "@/lib/server-db";
+
+type LeadPatch = {
+  id?: string;
+  status?: LeadStatus;
+  observacoes?: string;
+};
+
+function isText(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function isStatus(value: unknown): value is LeadStatus {
+  return typeof value === "string" && statusOrder.includes(value as LeadStatus);
+}
+
+function unauthorized() {
+  return Response.json(
+    { error: "Acesso restrito. Faca login para continuar." },
+    { status: 401 },
+  );
+}
+
+export async function GET() {
+  if (!(await isAuthenticated())) return unauthorized();
+
+  try {
+  const { data, error } = await database()
+    .from("leads")
+    .select("*")
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    return Response.json(
+      { error: "Nao foi possivel carregar os leads." },
+      { status: 500 },
+    );
+  }
+
+  return Response.json({ leads: data ?? [] });
+  } catch { return Response.json({ error: "Configure o banco e a chave de servidor para carregar os leads." }, { status: 503 }); }
+}
+
+export async function POST(request: Request) {
+  return captureLead(await request.json().catch(() => null));
+}
+
+export async function PATCH(request: Request) {
+  if (!(await isAuthenticated())) return unauthorized();
+
+  const body = (await request.json().catch(() => null)) as LeadPatch | null;
+  if (!body) return Response.json({ error: "Dados invalidos." }, { status: 400 });
+
+  if (!isText(body.id)) {
+    return Response.json(
+      { error: "Informe o id do lead para atualizar." },
+      { status: 400 },
+    );
+  }
+
+  const update: Partial<Pick<LeadPatch, "status" | "observacoes">> = {};
+
+  if (body.status !== undefined) {
+    if (!isStatus(body.status)) {
+      return Response.json(
+        { error: "Informe um status valido para atualizar o lead." },
+        { status: 400 },
+      );
+    }
+
+    update.status = body.status;
+  }
+
+  if (body.observacoes !== undefined) {
+    update.observacoes = String(body.observacoes).slice(0, 2000);
+  }
+
+  if (Object.keys(update).length === 0) {
+    return Response.json(
+      { error: "Informe ao menos um campo para atualizar." },
+      { status: 400 },
+    );
+  }
+
+  try {
+  const { data, error } = await database()
+    .from("leads")
+    .update(update)
+    .eq("id", body.id.trim())
+    .select()
+    .single();
+
+  if (error) {
+    return Response.json(
+      { error: "Nao foi possivel atualizar o status do lead." },
+      { status: 500 },
+    );
+  }
+
+  return Response.json({ lead: data });
+  } catch { return Response.json({ error: "Nao foi possivel salvar no banco." }, { status: 503 }); }
+}

@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
+  --background: #f7f7f2;
   --foreground: #171717;
 }
 
@@ -12,8 +12,92 @@
   --font-mono: "Courier New", Courier, monospace;
 }
 
+html {
+  scroll-behavior: smooth;
+}
+
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+button,
+a,
+input,
+select {
+  -webkit-tap-highlight-color: transparent;
+}
+
+input,
+select,
+textarea {
+  background: #ffffff;
+}
+
+.night-mode {
+  background: #111113 !important;
+  color: #f4f4f5 !important;
+}
+
+html.night-mode,
+html.night-mode body,
+html.night-mode main {
+  background: #111113 !important;
+  color: #f4f4f5 !important;
+}
+
+.night-mode .bg-white,
+.night-mode .bg-zinc-50,
+.night-mode .bg-zinc-100,
+.night-mode .bg-\[\#fafaf7\] {
+  background: #18181b !important;
+}
+
+.night-mode .bg-\[\#f7f7f2\] {
+  background: #18181b !important;
+}
+
+.night-mode .bg-\[\#fff8cc\] {
+  background: #3f3515 !important;
+}
+
+.night-mode .text-zinc-950,
+.night-mode .text-zinc-800,
+.night-mode .text-zinc-700,
+.night-mode .text-zinc-600,
+.night-mode .text-zinc-500 {
+  color: #e4e4e7 !important;
+}
+
+.night-mode .text-\[\#5a180f\],
+.night-mode .text-\[\#3b120d\] {
+  color: #ffe08a !important;
+}
+
+.night-mode .border-zinc-100,
+.night-mode .border-zinc-200,
+.night-mode .border-zinc-300,
+.night-mode .border-white {
+  border-color: #2f2f34 !important;
+}
+
+.night-mode input,
+.night-mode select,
+.night-mode textarea {
+  background: #111113 !important;
+  border-color: #3f3f46 !important;
+  color: #f4f4f5 !important;
+}
+
+.night-mode input::placeholder,
+.night-mode textarea::placeholder {
+  color: #a1a1aa !important;
+}
+
+.night-mode .shadow-sm,
+.night-mode .shadow-lg {
+  box-shadow: 0 12px 30px rgb(0 0 0 / 0.18) !important;
 }

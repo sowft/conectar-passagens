@@ -2,8 +2,9 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Conectar Passagens | MVP Comercial",
-  description: "MVP para captacao de leads e divulgacao de passagens.",
+  referrer: "no-referrer",
+  title: "Conectar Passagens | Central de Prospecção",
+  description: "Central de prospecção, captação e acompanhamento de oportunidades para venda de passagens.",
 };
 
 export default function RootLayout({
