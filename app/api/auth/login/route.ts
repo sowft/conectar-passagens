@@ -2,7 +2,8 @@ import { sessionCookie } from "@/lib/session";
 import { hashPassword, normalizeEmail } from "@/lib/auth";
 import { findLocalUser } from "@/lib/local-users";
 import { database } from "@/lib/server-db";
-import { hasAdminPassword, verifyAdminPassword } from "@/lib/admin-password";
+import { hasAdminPassword } from "@/lib/admin-password";
+import { verifyCurrentAdminPassword } from "@/lib/admin-access";
 
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
@@ -17,9 +18,12 @@ export async function POST(request: Request) {
   if (!process.env.SESSION_SECRET || process.env.SESSION_SECRET.length < 32 || (!hasAdminPassword() && !process.env.SUPABASE_SECRET_KEY && !process.env.SUPABASE_SERVICE_ROLE_KEY)) return Response.json({ error: "O acesso ainda nao foi configurado. Neste computador, abra Configurar acesso local para criar sua senha." }, { status: 503 });
 
   // The administrator is identified by its password; browser autofill may supply an email.
-  if (verifyAdminPassword(body.password)) {
-    return authenticatedResponse(Boolean(body.remember));
-  }
+  let credentialVersion = "";
+  try {
+    const admin = await verifyCurrentAdminPassword(body.password);
+    credentialVersion = admin.version;
+    if (admin.valid) return authenticatedResponse(Boolean(body.remember), admin.version);
+  } catch { return Response.json({ error: "Acesso temporariamente indisponivel. Tente novamente mais tarde." }, { status: 503 }); }
 
   if (!body.email || (!process.env.SUPABASE_SECRET_KEY && !process.env.SUPABASE_SERVICE_ROLE_KEY)) {
     return Response.json(
@@ -42,7 +46,7 @@ export async function POST(request: Request) {
     const localUser = await findLocalUser(email, passwordHash);
 
     if (localUser) {
-      return authenticatedResponse(Boolean(body.remember));
+      return authenticatedResponse(Boolean(body.remember), credentialVersion);
     }
 
     return Response.json(
@@ -51,16 +55,16 @@ export async function POST(request: Request) {
     );
   }
 
-  return authenticatedResponse(Boolean(body.remember));
+  return authenticatedResponse(Boolean(body.remember), credentialVersion);
   } catch { return Response.json({ error: "Acesso indisponivel. Confira a configuracao do servidor." }, { status: 503 }); }
 }
 
-function authenticatedResponse(remember: boolean) {
+function authenticatedResponse(remember: boolean, version = "") {
   return Response.json(
     { ok: true },
     {
       headers: {
-        "Set-Cookie": sessionCookie(remember),
+        "Set-Cookie": sessionCookie(remember, version),
       },
     },
   );

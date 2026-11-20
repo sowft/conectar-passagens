@@ -475,6 +475,8 @@ export default function Home() {
           <Link href="/captacao" className="mt-4 block text-center text-sm font-black text-[#9d1f16]">
             Abrir formulario publico
           </Link>
+          <Link href="/recuperar-senha" className="mt-4 block text-center text-sm font-bold text-[#9d1f16]">Esqueci minha senha</Link>
+          <Link href="/instalar" className="mt-4 block text-center text-sm font-bold text-[#9d1f16]">Instalar aplicativo</Link>
           {process.env.NODE_ENV === "development" && <Link href="/configurar" className="mt-4 block text-center text-sm font-bold text-[#9d1f16]">Primeiro acesso? Configurar acesso local</Link>}
         </form>
       </main>
@@ -501,6 +503,7 @@ export default function Home() {
           <p className="mt-3 text-sm leading-6 text-zinc-600">
             Prospecao, captacao e acompanhamento de oportunidades reais para venda de passagens.
           </p>
+          <Link href="/instalar" className="mt-4 inline-block text-sm font-bold text-[#9d1f16]">Instalar aplicativo neste aparelho</Link>
 
           <div className="mt-6 grid grid-cols-2 gap-3">
             <Card numero={leads.length} texto="leads captados" />

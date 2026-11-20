@@ -1,5 +1,26 @@
 # Ativacao da prospeccao
 
+## Instalar no Android, iPhone e Windows
+
+O app inclui manifesto PWA, icones e a pagina `/instalar`. Envie `https://conectar-passagens.vercel.app/instalar` para orientar a instalacao. Android: Chrome > menu > Instalar aplicativo. iPhone/iPad: Safari > Compartilhar > Adicionar a Tela de Inicio. Windows: Chrome/Edge > icone de instalacao ou menu > Instalar aplicativo. A disponibilidade e o nome das opcoes dependem do navegador. Navegadores internos de mensageiros podem exigir abrir no navegador principal.
+
+O app instalado usa o mesmo servidor e as mesmas credenciais. Consultas, login e gravacoes exigem internet. O service worker guarda somente uma pagina publica de aviso de falta de conexao; nao guarda contatos, respostas de API nem paginas autenticadas. Atualizacoes sao recebidas pelo site, sem reenviar um instalador.
+
+## Recuperacao administrativa por e-mail
+
+As telas `/recuperar-senha` e `/redefinir-senha` atendem o acesso administrativo compartilhado. Contas legadas da equipe continuam sendo recuperadas pelo administrador. Para ativar:
+
+1. Configure a chave privada do Supabase e execute primeiro `supabase-leads.sql` e `supabase-auth-recovery.sql` no projeto correto. A tabela de acesso tem RLS e so pode ser lida/alterada pelo servidor.
+2. Configure envio no Resend, com remetente autorizado. Documentacao: https://resend.com/docs/api-reference/emails/send-email
+3. Na Vercel, cadastre `ADMIN_RECOVERY_EMAIL` (e-mail que recebe a recuperacao), `RESEND_API_KEY`, `RESEND_FROM_EMAIL` e `PUBLIC_APP_URL=https://conectar-passagens.vercel.app`. Preserve `SESSION_SECRET` e as configuracoes do Supabase. Execute novo deploy.
+4. Teste Esqueci minha senha, abra o e-mail, troque a senha e confira que o link usado e as sessoes antigas sao recusados. Confirme tambem que a senha anterior deixou de funcionar.
+
+Sem essa configuracao, a pagina informa que a recuperacao ainda nao esta disponivel e nao simula envio. Nao envie chaves pelo chat nem publique `.env.local`.
+
+O servidor envia apenas para o e-mail administrativo configurado, retorna mensagem generica para nao revelar contas e limita novas emissoes a uma por minuto no banco. O token aleatorio vale 30 minutos, fica somente como hash no banco e e consumido atomicamente uma unica vez. O link transporta o token no fragmento; a pagina o remove do historico ao abrir. A senha nova e salva com scrypt; versoes de sessao invalidam acessos antigos. Depois de ativar, o banco passa a ser a fonte do acesso recuperado: uma falha de banco nao reabilita a senha antiga das variaveis. Nao remova `ADMIN_RECOVERY_EMAIL` depois de recuperar sem planejar a migracao de acesso.
+
+Proteja tambem login e recuperacao contra abuso no provedor. Confirme a entrega real de e-mail e a instalacao nos aparelhos antes do aceite; build e testes com simulacoes nao comprovam esses servicos externos.
+
 O codigo inclui pesquisa de empresas pelo Google Places, campanhas persistidas, links por campanha/canal, formulario com autorizacao de contato, funil manual e encaminhamento para a ClickBus. Isso nao publica anuncios automaticamente nem confirma compras no site externo.
 
 ## Situacao da operacao

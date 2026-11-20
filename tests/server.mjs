@@ -231,3 +231,107 @@ test("admin login can access the panel without a configured cloud database", asy
     for (const [key, value] of [["ADMIN_PASSWORD", previous.password], ["ADMIN_PASSWORD_HASH", previous.hash], ["SESSION_SECRET", previous.secret], ["SUPABASE_SECRET_KEY", previous.key], ["SUPABASE_SERVICE_ROLE_KEY", previous.role]]) { if (value === undefined) delete process.env[key]; else process.env[key] = value; }
   }
 });
+
+test("recovery is unavailable without setup and blocks cross-origin requests", async () => {
+  const previous = process.env.ADMIN_RECOVERY_EMAIL;
+  try {
+    delete process.env.ADMIN_RECOVERY_EMAIL;
+    const route = load("app/api/auth/recover/route.ts");
+    assert.deepEqual(await (await route.GET()).json(), { available: false });
+    const request = origin => new Request("https://app.example/api/auth/recover", { method: "POST", headers: { origin, "Content-Type": "application/json" }, body: JSON.stringify({ email: "admin@example.com" }) });
+    assert.equal((await route.POST(request("https://evil.example"))).status, 403);
+    assert.equal((await route.POST(request("https://app.example"))).status, 503);
+  } finally { if (previous === undefined) delete process.env.ADMIN_RECOVERY_EMAIL; else process.env.ADMIN_RECOVERY_EMAIL = previous; }
+});
+
+test("recovery sends only to the administrator, persists only token digests and enforces expiry and single use", async () => {
+  const keys = ["ADMIN_RECOVERY_EMAIL", "PUBLIC_APP_URL", "RESEND_API_KEY", "RESEND_FROM_EMAIL", "NEXT_PUBLIC_SUPABASE_URL", "SUPABASE_SECRET_KEY"];
+  const previous = Object.fromEntries(keys.map(key => [key, process.env[key]]));
+  const originalFetch = global.fetch;
+  const state = { pending: null, sent: [], lastRequest: 0 };
+  const db = {
+    rpc: async (name, args) => {
+      if (name === "request_admin_recovery") {
+        if (Date.now() - state.lastRequest < 60000) return { data: false, error: null };
+        state.lastRequest = Date.now(); state.pending = { digest: args.p_token_hash, expires: Date.now() + 1800000 };
+        return { data: true, error: null };
+      }
+      if (!state.pending || state.pending.digest !== args.p_token_hash || state.pending.expires <= Date.now()) return { data: false, error: null };
+      state.password = args.p_password_hash; state.pending = null;
+      return { data: true, error: null };
+    },
+    from: () => {
+      const filters = {};
+      const query = { select: () => query, eq: (key, value) => { filters[key] = value; return query; }, gt: () => query,
+        maybeSingle: async () => ({ data: state.pending?.digest === filters.token_hash && state.pending.expires > Date.now() ? { id: "admin" } : null, error: null }) };
+      return query;
+    },
+  };
+  try {
+    Object.assign(process.env, { ADMIN_RECOVERY_EMAIL: "admin@example.com", PUBLIC_APP_URL: "https://app.example", RESEND_API_KEY: "test", RESEND_FROM_EMAIL: "Conectar <test@example.com>", NEXT_PUBLIC_SUPABASE_URL: "https://db.example", SUPABASE_SECRET_KEY: "test" });
+    global.fetch = async (url, options) => { assert.equal(url, "https://api.resend.com/emails"); state.sent.push(JSON.parse(options.body)); return Response.json({ id: "sent" }); };
+    const recovery = load("lib/password-recovery.ts", { "@/lib/server-db": { database: () => db } });
+    await recovery.requestPasswordRecovery("unknown@example.com"); assert.equal(state.sent.length, 0);
+    await recovery.requestPasswordRecovery(" ADMIN@example.com "); assert.equal(state.sent.length, 1);
+    assert.deepEqual(state.sent[0].to, ["admin@example.com"]);
+    const link = new URL(state.sent[0].text.match(/https:\/\/[^\s]+/)[0]);
+    assert.equal(link.origin, "https://app.example"); assert.equal(link.search, "");
+    const token = new URLSearchParams(link.hash.slice(1)).get("token");
+    assert.match(token, /^[a-f0-9]{64}$/); assert.notEqual(state.pending.digest, token);
+    assert.equal(state.pending.digest, recovery.digestRecoveryToken(token));
+    await recovery.requestPasswordRecovery("admin@example.com"); assert.equal(state.sent.length, 1);
+    assert.equal(await recovery.resetAdminPassword("0".repeat(64), "new-test-password"), false);
+    state.pending.expires = Date.now() - 1;
+    assert.equal(await recovery.resetAdminPassword(token, "new-test-password"), false);
+    state.pending.expires = Date.now() + 60000;
+    const results = await Promise.all([recovery.resetAdminPassword(token, "new-test-password"), recovery.resetAdminPassword(token, "second-test-password")]);
+    assert.equal(results.filter(Boolean).length, 1);
+    assert.match(state.password, /^scrypt:/); assert.equal(state.password.includes("new-test-password"), false);
+    assert.equal(await recovery.resetAdminPassword(token, "new-test-password"), false);
+  } finally {
+    global.fetch = originalFetch;
+    for (const key of keys) { if (previous[key] === undefined) delete process.env[key]; else process.env[key] = previous[key]; }
+  }
+});
+
+test("reset password validates origin and strength before touching recovery state", async () => {
+  let calls = 0;
+  const route = load("app/api/auth/reset/route.ts", { "@/lib/password-recovery": {
+    sameOriginJson: request => request.headers.get("origin") === "https://app.example",
+    resetAdminPassword: async () => { calls++; return true; },
+  } });
+  const request = (origin, password, token = "a".repeat(64)) => new Request("https://app.example/api/auth/reset", { method: "POST", headers: { origin, "Content-Type": "application/json" }, body: JSON.stringify({ token, password }) });
+  assert.equal((await route.POST(request("https://evil.example", "new-test-password"))).status, 403);
+  assert.equal((await route.POST(request("https://app.example", "short"))).status, 400);
+  assert.equal((await route.POST(request("https://app.example", "new-test-password", "bad"))).status, 400);
+  assert.equal(calls, 0);
+  const response = await route.POST(request("https://app.example", "new-test-password"));
+  assert.equal(response.status, 200); assert.match(response.headers.get("set-cookie"), /Max-Age=0/); assert.equal(calls, 1);
+});
+
+test("reset invalidates old sessions and old environment passwords, even during database failure", async () => {
+  const previous = { email: process.env.ADMIN_RECOVERY_EMAIL, password: process.env.ADMIN_PASSWORD, hash: process.env.ADMIN_PASSWORD_HASH, secret: process.env.SESSION_SECRET };
+  let token = "", current = null, unavailable = false;
+  const version = "12345678-1234-1234-1234-123456789abc";
+  try {
+    process.env.ADMIN_RECOVERY_EMAIL = "admin@example.com"; process.env.ADMIN_PASSWORD = "old-test-password"; delete process.env.ADMIN_PASSWORD_HASH; process.env.SESSION_SECRET = "s".repeat(64);
+    const db = { from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: current, error: unavailable ? new Error("db") : null }) }) }) }) };
+    const access = load("lib/admin-access.ts", { "@/lib/server-db": { database: () => db } });
+    assert.equal((await access.verifyCurrentAdminPassword("old-test-password")).valid, true);
+    const session = load("lib/session.ts", { "@/lib/admin-access": access, "next/headers": { cookies: async () => ({ get: () => ({ value: token }) }) } });
+    token = session.sessionCookie(true).split(";")[0].slice("conectar_admin=".length);
+    assert.equal(await session.isAuthenticated(), true);
+    current = { password_hash: load("lib/admin-password.ts").encodeAdminPassword("new-test-password"), version };
+    assert.equal(await session.isAuthenticated(), false);
+    assert.equal((await access.verifyCurrentAdminPassword("old-test-password")).valid, false);
+    assert.deepEqual(await access.verifyCurrentAdminPassword("new-test-password"), { valid: true, version });
+    token = session.sessionCookie(true, version).split(";")[0].slice("conectar_admin=".length);
+    assert.equal(await session.isAuthenticated(), true);
+    token += ".extra"; assert.equal(await session.isAuthenticated(), false);
+    unavailable = true;
+    await assert.rejects(() => access.verifyCurrentAdminPassword("old-test-password"), /ADMIN_ACCESS_UNAVAILABLE/);
+    assert.equal(await session.isAuthenticated(), false);
+  } finally {
+    for (const [key, value] of [["ADMIN_RECOVERY_EMAIL", previous.email], ["ADMIN_PASSWORD", previous.password], ["ADMIN_PASSWORD_HASH", previous.hash], ["SESSION_SECRET", previous.secret]]) { if (value === undefined) delete process.env[key]; else process.env[key] = value; }
+  }
+});
