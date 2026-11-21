@@ -7,6 +7,28 @@ import ts from "typescript";
 import { createRequire } from "node:module";
 const nodeRequire = createRequire(import.meta.url);
 
+test("lead listing and status updates preserve legacy bigint and UUID identifiers", async () => {
+  const { createClient } = nodeRequire("@supabase/supabase-js");
+  for (const id of ["9223372036854775806", "12345678-1234-1234-1234-123456789abc"]) {
+    const requests = [];
+    const db = createClient("https://database.example", "test-key", {
+      auth: { persistSession: false },
+      global: { fetch: async (input, init) => {
+        const url = new URL(String(input)); requests.push({ url, init });
+        assert.match(url.searchParams.get("select"), /^id::text,/);
+        const lead = { id, nome: "Contato de teste", status: init.method === "PATCH" ? "qualificado" : "novo" };
+        return Response.json(init.method === "PATCH" ? lead : [lead]);
+      } },
+    });
+    const route = load("app/api/leads/route.ts", { "@/lib/session": { isAuthenticated: async () => true }, "@/lib/server-db": { database: () => db } });
+    const listing = await route.GET(); assert.equal(listing.status, 200); assert.equal((await listing.json()).leads[0].id, id);
+    const updated = await route.PATCH(new Request("https://app.example/api/leads", { method: "PATCH", body: JSON.stringify({ id, status: "qualificado" }) }));
+    assert.equal(updated.status, 200); assert.equal((await updated.json()).lead.id, id);
+    assert.equal(requests[1].url.searchParams.get("id"), `eq.${id}`);
+    assert.equal(JSON.parse(requests[1].init.body).status, "qualificado");
+  }
+});
+
 function load(file, mocks = {}) {
   const filename = path.resolve(file);
   const source = ts.transpileModule(fs.readFileSync(filename, "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true } }).outputText;

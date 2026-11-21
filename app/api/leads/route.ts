@@ -3,6 +3,10 @@ import { isAuthenticated } from "@/lib/session";
 import { LeadStatus, statusOrder } from "@/lib/leads";
 import { database } from "@/lib/server-db";
 
+// Cast in PostgreSQL before JSON serialization: preserve bigint precision and
+// keep the same string ID contract for the prototype and newer UUID databases.
+const leadColumns = "id::text,nome,telefone,origem,destino,data_viagem,fonte,status,observacoes,created_at,campaign_id,visit_id,consentimento_em";
+
 type LeadPatch = {
   id?: string;
   status?: LeadStatus;
@@ -30,7 +34,7 @@ export async function GET() {
   try {
   const { data, error } = await database()
     .from("leads")
-    .select("*")
+    .select(leadColumns)
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -90,7 +94,7 @@ export async function PATCH(request: Request) {
     .from("leads")
     .update(update)
     .eq("id", body.id.trim())
-    .select()
+    .select(leadColumns)
     .single();
 
   if (error) {

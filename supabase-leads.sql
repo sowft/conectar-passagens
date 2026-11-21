@@ -1,3 +1,5 @@
+begin;
+
 create table if not exists public.leads (
   id uuid primary key default gen_random_uuid(),
   nome text not null,
@@ -11,8 +13,14 @@ create table if not exists public.leads (
   created_at timestamptz not null default now()
 );
 
+-- Upgrade the six-column prototype without replacing rows or its bigint identity.
+-- New databases keep UUID identifiers; both forms are returned as text by the API.
 alter table public.leads
-add column if not exists observacoes text;
+  add column if not exists data_viagem date,
+  add column if not exists fonte text not null default 'Landing Page',
+  add column if not exists status text not null default 'novo'
+    check (status in ('novo', 'qualificado', 'contatado', 'convertido')),
+  add column if not exists observacoes text;
 
 alter table public.leads enable row level security;
 
@@ -76,3 +84,6 @@ language sql stable security invoker set search_path = public as $$
 $$;
 revoke all on function public.campaign_metrics() from public, anon, authenticated;
 grant execute on function public.campaign_metrics() to service_role;
+
+notify pgrst, 'reload schema';
+commit;

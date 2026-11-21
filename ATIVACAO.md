@@ -1,5 +1,7 @@
 # Ativacao da prospeccao
 
+Se o projeto Supabase tiver a tabela antiga `leads` com apenas `id`, `nome`, `telefone`, `origem`, `destino` e `created_at`, execute o `supabase-leads.sql` atualizado por completo. Ele acrescenta os campos do CRM sem excluir linhas ou alterar o identificador numerico existente. O aplicativo aceita identificadores bigint e UUID e pede ao banco que devolva o ID como texto, preservando a precisao. A migracao roda em uma transacao e pode ser repetida. Execute tambem `supabase-auth-recovery.sql` para a recuperacao administrativa.
+
 ## Instalar no Android, iPhone e Windows
 
 O app inclui manifesto PWA, icones e a pagina `/instalar`. Envie `https://conectar-passagens.vercel.app/instalar` para orientar a instalacao. Android: Chrome > menu > Instalar aplicativo. iPhone/iPad: Safari > Compartilhar > Adicionar a Tela de Inicio. Windows: Chrome/Edge > icone de instalacao ou menu > Instalar aplicativo. A disponibilidade e o nome das opcoes dependem do navegador. Navegadores internos de mensageiros podem exigir abrir no navegador principal.
