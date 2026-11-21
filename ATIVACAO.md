@@ -1,5 +1,20 @@
 # Ativacao da prospeccao
 
+## Contas individuais e recuperacao para qualquer e-mail
+
+A tela inicial oferece Entrar e Criar conta. Qualquer pessoa pode informar seu proprio e-mail, cadastrar uma senha e confirmar o endereco. Esqueci minha senha aceita qualquer e-mail valido e encaminha a recuperacao ao Supabase Auth. A resposta nao revela se a conta existe. Cada conta ve apenas suas campanhas e os contatos vinculados a elas. Os dados antigos sem proprietario continuam restritos ao administrador original, que entra com e-mail vazio.
+
+Para ativar na hospedagem:
+
+1. Execute `supabase-contas.sql` depois de `supabase-leads.sql`. Se repetir a migracao geral, repita tambem a de contas para restaurar as permissoes individuais. As tabelas `auth.users` e a funcao `auth.uid()` sao fornecidas pelo Supabase.
+2. Cadastre `NEXT_PUBLIC_SUPABASE_ANON_KEY` ou `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` na Vercel, alem da URL do Supabase. A chave publica e diferente da chave privada usada apenas pelo servidor administrativo. Defina `PUBLIC_APP_URL=https://conectar-passagens.vercel.app`.
+3. No Supabase, em Authentication, habilite cadastro por e-mail e configure URL Configuration com Site URL `https://conectar-passagens.vercel.app` e Redirect URLs `https://conectar-passagens.vercel.app/auth/callback` e `https://conectar-passagens.vercel.app/auth/callback?next=/redefinir-senha`.
+4. Configure SMTP em Authentication para entrega a destinatarios externos. O envio padrao do Supabase tem restricoes e nao garante e-mail para qualquer pessoa. Referencia: https://supabase.com/docs/guides/auth/auth-smtp
+5. Para links que possam ser abertos em outro navegador/aparelho, use os modelos de e-mail com token_hash: confirmacao `<a href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=signup">Confirmar e-mail</a>` e recuperacao `<a href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=recovery">Redefinir senha</a>`. Sem a adaptacao, o fluxo PKCE padrao exige abrir o link no navegador onde foi solicitado.
+6. Publique novamente e teste com duas contas: cadastro, confirmacao, login, recuperacao e isolamento de campanhas/contatos. Teste envio real: testes simulados nao comprovam entrega SMTP.
+
+O fluxo de contas individuais nao exige `ADMIN_RECOVERY_EMAIL` nem a integracao direta `RESEND_API_KEY` do fluxo administrativo antigo. As senhas e os links individuais sao geridos pelo Supabase Auth; o servidor verifica o usuario antes de acessar o banco com o JWT dessa pessoa e RLS. Nao ha acesso publico aos dados administrativos.
+
 Se o projeto Supabase tiver a tabela antiga `leads` com apenas `id`, `nome`, `telefone`, `origem`, `destino` e `created_at`, execute o `supabase-leads.sql` atualizado por completo. Ele acrescenta os campos do CRM sem excluir linhas ou alterar o identificador numerico existente. O aplicativo aceita identificadores bigint e UUID e pede ao banco que devolva o ID como texto, preservando a precisao. A migracao roda em uma transacao e pode ser repetida. Execute tambem `supabase-auth-recovery.sql` para a recuperacao administrativa.
 
 ## Instalar no Android, iPhone e Windows
@@ -8,20 +23,11 @@ O app inclui manifesto PWA, icones e a pagina `/instalar`. Envie `https://conect
 
 O app instalado usa o mesmo servidor e as mesmas credenciais. Consultas, login e gravacoes exigem internet. O service worker guarda somente uma pagina publica de aviso de falta de conexao; nao guarda contatos, respostas de API nem paginas autenticadas. Atualizacoes sao recebidas pelo site, sem reenviar um instalador.
 
-## Recuperacao administrativa por e-mail
+## Acesso administrativo original
 
-As telas `/recuperar-senha` e `/redefinir-senha` atendem o acesso administrativo compartilhado. Contas legadas da equipe continuam sendo recuperadas pelo administrador. Para ativar:
+O administrador original ainda pode entrar com e-mail vazio e a senha configurada na hospedagem. O fluxo novo de contas individuais nao altera essa senha. A recuperacao administrativa anterior permanece apenas como compatibilidade na API com `mode: "admin"`, se ja tiver sido configurada com `ADMIN_RECOVERY_EMAIL`, `RESEND_API_KEY`, `RESEND_FROM_EMAIL` e `supabase-auth-recovery.sql`. Esses valores nao sao necessarios para cadastrar e recuperar contas individuais. Depois de recuperar uma senha administrativa por esse mecanismo antigo, preserve sua configuracao e a tabela `admin_access`, pois o banco passa a ser a fonte da senha recuperada.
 
-1. Configure a chave privada do Supabase e execute primeiro `supabase-leads.sql` e `supabase-auth-recovery.sql` no projeto correto. A tabela de acesso tem RLS e so pode ser lida/alterada pelo servidor.
-2. Configure envio no Resend, com remetente autorizado. Documentacao: https://resend.com/docs/api-reference/emails/send-email
-3. Na Vercel, cadastre `ADMIN_RECOVERY_EMAIL` (e-mail que recebe a recuperacao), `RESEND_API_KEY`, `RESEND_FROM_EMAIL` e `PUBLIC_APP_URL=https://conectar-passagens.vercel.app`. Preserve `SESSION_SECRET` e as configuracoes do Supabase. Execute novo deploy.
-4. Teste Esqueci minha senha, abra o e-mail, troque a senha e confira que o link usado e as sessoes antigas sao recusados. Confirme tambem que a senha anterior deixou de funcionar.
-
-Sem essa configuracao, a pagina informa que a recuperacao ainda nao esta disponivel e nao simula envio. Nao envie chaves pelo chat nem publique `.env.local`.
-
-O servidor envia apenas para o e-mail administrativo configurado, retorna mensagem generica para nao revelar contas e limita novas emissoes a uma por minuto no banco. O token aleatorio vale 30 minutos, fica somente como hash no banco e e consumido atomicamente uma unica vez. O link transporta o token no fragmento; a pagina o remove do historico ao abrir. A senha nova e salva com scrypt; versoes de sessao invalidam acessos antigos. Depois de ativar, o banco passa a ser a fonte do acesso recuperado: uma falha de banco nao reabilita a senha antiga das variaveis. Nao remova `ADMIN_RECOVERY_EMAIL` depois de recuperar sem planejar a migracao de acesso.
-
-Proteja tambem login e recuperacao contra abuso no provedor. Confirme a entrega real de e-mail e a instalacao nos aparelhos antes do aceite; build e testes com simulacoes nao comprovam esses servicos externos.
+Proteja login e recuperacao contra abuso no provedor. Confirme a entrega real de e-mail e a instalacao nos aparelhos antes do aceite; build e testes com simulacoes nao comprovam esses servicos externos.
 
 O codigo inclui pesquisa de empresas pelo Google Places, campanhas persistidas, links por campanha/canal, formulario com autorizacao de contato, funil manual e encaminhamento para a ClickBus. Isso nao publica anuncios automaticamente nem confirma compras no site externo.
 
@@ -66,6 +72,7 @@ No arquivo `.env.local` (nunca publique seu conteudo):
 
 ```dotenv
 NEXT_PUBLIC_SUPABASE_URL=URL_DO_PROJETO
+NEXT_PUBLIC_SUPABASE_ANON_KEY=CHAVE_PUBLICA_DO_PROJETO
 SUPABASE_SECRET_KEY=CHAVE_SECRETA_DO_SUPABASE
 SESSION_SECRET=SEGREDO_ALEATORIO_COM_PELO_MENOS_32_CARACTERES
 ADMIN_PASSWORD=SENHA_FORTE_DE_ACESSO_INTERNO
@@ -74,7 +81,7 @@ LEAD_INGEST_TOKEN=TOKEN_ALEATORIO_COM_PELO_MENOS_32_CARACTERES
 PUBLIC_APP_URL=https://ENDERECO_PUBLICO_DA_APLICACAO
 ```
 
-SUPABASE_SERVICE_ROLE_KEY legado continua aceito como alternativa. SESSION_SECRET ja foi gerado localmente nesta implementacao. Configure os demais valores necessarios. Nunca use NEXT_PUBLIC_ para as chaves de servidor. A chave anon antiga nao e mais usada pelas telas principais. O login administrativo usa email vazio e ADMIN_PASSWORD. Contas legadas podem entrar com email quando o banco estiver configurado; cadastro publico foi desativado.
+SUPABASE_SERVICE_ROLE_KEY legado continua aceito como alternativa. SESSION_SECRET ja foi gerado localmente nesta implementacao. Configure os demais valores necessarios. Nunca use NEXT_PUBLIC_ para as chaves de servidor. A chave publica e usada nas contas individuais com RLS. O login administrativo usa e-mail vazio e ADMIN_PASSWORD ou ADMIN_PASSWORD_HASH. Contas novas sao criadas pelo Supabase Auth; os hashes antigos de usuarios nao sao usados para cadastrar ou recuperar essas contas.
 
 1. Execute `supabase-leads.sql` no SQL Editor do seu projeto Supabase. A migracao preserva leads existentes e revoga leitura/escrita anonimas. Ela pode ser executada novamente.
 2. Ative Places API (New) no Google Cloud, configure faturamento, restrinja a chave e defina cotas. O app solicita nome, endereco, telefone e site em ate 10 resultados por busca. As consultas podem gerar cobranca do Google.

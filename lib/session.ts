@@ -1,6 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
 import { adminAccessState, managedAdminEnabled } from "@/lib/admin-access";
+import { accountUser } from "@/lib/account-auth";
 
 function secret() {
   const value = process.env.SESSION_SECRET;
@@ -12,7 +13,7 @@ export function sessionCookie(remember: boolean, version = "") {
   const signature = createHmac("sha256", secret()).update(version ? `${expires}.${version}` : expires).digest("hex");
   return `conectar_admin=${expires}.${signature}${version ? `.${version}` : ""}; Path=/; HttpOnly; SameSite=Lax${remember ? "; Max-Age=604800" : ""}${process.env.NODE_ENV === "production" ? "; Secure" : ""}`;
 }
-export async function isAuthenticated() {
+export async function isAdminAuthenticated() {
   const token = (await cookies()).get("conectar_admin")?.value ?? "";
   const [expires, signature, version = "", extra] = token.split(".");
   if (extra !== undefined || (version && !/^[a-f0-9-]{36}$/.test(version))) return false;
@@ -24,4 +25,8 @@ export async function isAuthenticated() {
     catch { return false; }
   }
   return version === "";
+}
+
+export async function isAuthenticated() {
+  return await isAdminAuthenticated() || Boolean(await accountUser());
 }

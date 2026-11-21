@@ -1,10 +1,10 @@
 import { isAuthenticated } from "@/lib/session";
-import { database } from "@/lib/server-db";
+import { sessionDatabase } from "@/lib/session-database";
 
 export async function GET() {
   if (!await isAuthenticated()) return Response.json({ error: "Entre para continuar." }, { status: 401 });
   try {
-    const { data, error } = await database().rpc("campaign_metrics");
+    const { data, error } = await (await sessionDatabase()).rpc("campaign_metrics");
     if (error) throw error;
     return Response.json({ metrics: data }, { headers: { "Cache-Control": "no-store" } });
   } catch {

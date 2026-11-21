@@ -20,7 +20,7 @@ test("lead listing and status updates preserve legacy bigint and UUID identifier
         return Response.json(init.method === "PATCH" ? lead : [lead]);
       } },
     });
-    const route = load("app/api/leads/route.ts", { "@/lib/session": { isAuthenticated: async () => true }, "@/lib/server-db": { database: () => db } });
+    const route = load("app/api/leads/route.ts", { "@/lib/session": { isAuthenticated: async () => true }, "@/lib/session-database": { sessionDatabase: async () => db } });
     const listing = await route.GET(); assert.equal(listing.status, 200); assert.equal((await listing.json()).leads[0].id, id);
     const updated = await route.PATCH(new Request("https://app.example/api/leads", { method: "PATCH", body: JSON.stringify({ id, status: "qualificado" }) }));
     assert.equal(updated.status, 200); assert.equal((await updated.json()).lead.id, id);
@@ -242,13 +242,14 @@ test("admin login can access the panel without a configured cloud database", asy
     const route = load("app/api/auth/login/route.ts", {
       "@/lib/session": { sessionCookie: () => "test-cookie" },
       "@/lib/server-db": { database: () => { throw new Error("must not access cloud database"); } },
+      "@/lib/account-auth": { accountAuthConfigured: () => false, clearAccountCookies: async () => {}, sameOriginAccountRequest: () => true },
     });
     const request = (password, email) => new Request("http://localhost/api/auth/login", { method: "POST", body: JSON.stringify({ password, email }) });
     assert.equal((await route.POST(request("local-test-password"))).status, 200);
-    assert.equal((await route.POST(request("local-test-password", "autofill@example.com"))).status, 200);
+    assert.equal((await route.POST(request("local-test-password", "autofill@example.com"))).status, 503);
     assert.equal((await route.POST(request("local-test-password", "   "))).status, 200);
     assert.equal((await route.POST(request("wrong-password"))).status, 401);
-    assert.equal((await route.POST(request("wrong-password", "autofill@example.com"))).status, 401);
+    assert.equal((await route.POST(request("wrong-password", "autofill@example.com"))).status, 503);
   } finally {
     for (const [key, value] of [["ADMIN_PASSWORD", previous.password], ["ADMIN_PASSWORD_HASH", previous.hash], ["SESSION_SECRET", previous.secret], ["SUPABASE_SECRET_KEY", previous.key], ["SUPABASE_SERVICE_ROLE_KEY", previous.role]]) { if (value === undefined) delete process.env[key]; else process.env[key] = value; }
   }
@@ -356,4 +357,93 @@ test("reset invalidates old sessions and old environment passwords, even during 
   } finally {
     for (const [key, value] of [["ADMIN_RECOVERY_EMAIL", previous.email], ["ADMIN_PASSWORD", previous.password], ["ADMIN_PASSWORD_HASH", previous.hash], ["SESSION_SECRET", previous.secret]]) { if (value === undefined) delete process.env[key]; else process.env[key] = value; }
   }
+});
+
+const authRequest = (path, body, origin = "https://app.example") => new Request(`https://app.example${path}`, { method: "POST", headers: { origin, "Content-Type": "application/json" }, body: JSON.stringify(body) });
+const accountBoundary = { accountAuthConfigured: () => true, appOrigin: () => "https://app.example", sameOriginAccountRequest: request => request.headers.get("origin") === "https://app.example" };
+
+test("public signup accepts independent email addresses and waits for confirmation", async () => {
+  const registrations = []; let preferences = 0;
+  const route = load("app/api/auth/register/route.ts", { "@/lib/account-auth": {
+    ...accountBoundary, setAccountPreference: async () => { preferences++; },
+    accountAuth: async () => ({ auth: { signUp: async input => { registrations.push(input); return { data: { session: null }, error: null }; } } }),
+  } });
+  for (const email of ["Pessoa@exemplo.com", "julio@outra-empresa.com"]) {
+    const response = await route.POST(authRequest("/api/auth/register", { nome: "Contato", email, password: "account-test-password" }));
+    assert.equal(response.status, 201); assert.equal((await response.json()).requiresConfirmation, true);
+  }
+  assert.deepEqual(registrations.map(r => r.email), ["pessoa@exemplo.com", "julio@outra-empresa.com"]);
+  assert.equal(preferences, 0);
+  assert.equal((await route.POST(authRequest("/api/auth/register", { nome: "Contato", email: "invalid", password: "short" }))).status, 400);
+  assert.equal((await route.POST(authRequest("/api/auth/register", {}, "https://evil.example"))).status, 403);
+  assert.equal(registrations.length, 2);
+});
+
+test("account recovery accepts any valid email and does not report provider failure as a sent email", async () => {
+  const addresses = []; let failure = false;
+  const route = load("app/api/auth/recover/route.ts", { "@/lib/account-auth": {
+    ...accountBoundary,
+    accountAuth: async () => ({ auth: { resetPasswordForEmail: async (email, options) => { addresses.push(email); assert.equal(options.redirectTo, "https://app.example/auth/callback?next=/redefinir-senha"); return { error: failure ? { status: 429 } : null }; } } }),
+  } });
+  let generic;
+  for (const email of ["pessoa@exemplo.com", "julio@outra-empresa.com"]) {
+    const response = await route.POST(authRequest("/api/auth/recover", { email }));
+    assert.equal(response.status, 200); const body = await response.json(); if (!generic) generic = body; else assert.deepEqual(body, generic);
+  }
+  assert.deepEqual(addresses, ["pessoa@exemplo.com", "julio@outra-empresa.com"]);
+  failure = true;
+  assert.equal((await route.POST(authRequest("/api/auth/recover", { email: "pessoa@exemplo.com" }))).status, 503);
+  assert.equal((await route.POST(authRequest("/api/auth/recover", { email: "not-an-email" }))).status, 400);
+});
+
+test("email login uses individual authentication and cannot mint an admin cookie", async () => {
+  const signedIn = []; let preference;
+  const route = load("app/api/auth/login/route.ts", {
+    "@/lib/account-auth": { ...accountBoundary, setAccountPreference: async remember => { preference = remember; }, accountAuth: async () => ({ auth: { signInWithPassword: async input => { signedIn.push(input); return { error: null }; } } }) },
+    "@/lib/admin-access": { verifyCurrentAdminPassword: async () => { throw new Error("must not authenticate email as admin"); } },
+    "@/lib/session": { sessionCookie: () => { throw new Error("must not mint admin cookie"); } },
+  });
+  const response = await route.POST(authRequest("/api/auth/login", { email: " JULIO@EXEMPLO.COM ", password: "account-test-password", remember: true }));
+  assert.equal(response.status, 200); assert.equal(preference, true); assert.equal(signedIn[0].email, "julio@exemplo.com");
+});
+
+test("account password reset changes only the server-verified user's password", async () => {
+  let loggedIn = false, updated = [], cleared = 0, signouts = [];
+  const route = load("app/api/auth/reset/route.ts", { "@/lib/account-auth": {
+    ...accountBoundary, clearAccountCookies: async () => { cleared++; },
+    accountAuth: async () => ({ auth: {
+      getUser: async () => ({ data: { user: loggedIn ? { id: "own-user" } : null }, error: null }),
+      updateUser: async input => { updated.push(input); return { error: null }; },
+      signOut: async input => { signouts.push(input); return { error: null }; },
+    } }),
+  } });
+  const request = () => authRequest("/api/auth/reset", { mode: "account", password: "new-account-password", email: "someone-else@example.com", id: "someone-else" });
+  assert.equal((await route.POST(request())).status, 401); assert.equal(updated.length, 0);
+  loggedIn = true; assert.equal((await route.POST(request())).status, 200);
+  assert.deepEqual(updated, [{ password: "new-account-password" }]); assert.deepEqual(signouts, [{ scope: "global" }]); assert.equal(cleared, 1);
+});
+
+test("individual database access always uses the verified user's RLS client", async () => {
+  let admin = false, authenticated = true, serviceCalls = 0;
+  const personal = { auth: { getUser: async () => ({ data: { user: authenticated ? { id: "own-user" } : null }, error: null }) } };
+  const service = {};
+  const { sessionDatabase } = load("lib/session-database.ts", {
+    "@/lib/session": { isAdminAuthenticated: async () => admin },
+    "@/lib/server-db": { database: () => { serviceCalls++; return service; } },
+    "@/lib/account-auth": { accountAuth: async () => personal },
+  });
+  assert.equal(await sessionDatabase(), personal); assert.equal(serviceCalls, 0);
+  authenticated = false; await assert.rejects(() => sessionDatabase(), /UNAUTHORIZED/); assert.equal(serviceCalls, 0);
+  admin = true; assert.equal(await sessionDatabase(), service); assert.equal(serviceCalls, 1);
+});
+
+test("confirmation callbacks reject external redirects and verify email tokens with the provider", async () => {
+  const verified = [];
+  const mocks = { "@/lib/account-auth": { ...accountBoundary, accountRedirect: url => new Response(null, { status: 303, headers: { Location: url, "Cache-Control": "no-store, private" } }), setAccountPreference: async () => {}, clearAccountCookies: async () => {}, accountAuth: async () => ({ auth: { verifyOtp: async input => { verified.push(input); return { error: null }; }, exchangeCodeForSession: async () => ({ error: null }), signOut: async () => ({ error: null }) } }) } };
+  const confirm = load("app/auth/confirm/route.ts", mocks);
+  const response = await confirm.GET(new Request("https://app.example/auth/confirm?token_hash=test-token&type=recovery&next=https://evil.example"));
+  assert.equal(response.headers.get("location"), "https://app.example/redefinir-senha?conta=1"); assert.deepEqual(verified, [{ token_hash: "test-token", type: "recovery" }]);
+  const callback = load("app/auth/callback/route.ts", mocks);
+  const signup = await callback.GET(new Request("https://app.example/auth/callback?code=test&next=https://evil.example"));
+  assert.equal(signup.headers.get("location"), "https://app.example/?confirmado=1");
 });

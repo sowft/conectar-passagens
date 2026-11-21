@@ -82,6 +82,8 @@ export default function Home() {
   const [senha, setSenha] = useState("");
   const [lembrarLogin, setLembrarLogin] = useState(false);
   const [erroLogin, setErroLogin] = useState("");
+  const [mensagemLogin, setMensagemLogin] = useState("");
+  const [enviandoAcesso, setEnviandoAcesso] = useState(false);
   const [prospecao, setProspecao] = useState<Prospecao>(planoInicial);
   const [prospecaoAtiva, setProspecaoAtiva] = useState<Prospecao>(planoInicial);
   const [filtros, setFiltros] = useState<FiltrosOportunidades>(filtrosIniciais);
@@ -143,6 +145,9 @@ export default function Home() {
 
       setLembrarLogin(deveManterLogin);
       setEmail(window.localStorage.getItem("conectar-email-login") ?? "");
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("cadastro") === "1") setModoAcesso("cadastro");
+      if (params.get("confirmado") === "1") setMensagemLogin("E-mail confirmado. Entre com seu e-mail e senha.");
 
       void (async () => {
         try {
@@ -177,7 +182,11 @@ export default function Home() {
 
   async function entrar(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (enviandoAcesso) return;
+    setEnviandoAcesso(true);
     setErroLogin("");
+    setMensagemLogin("");
+    try {
 
     const response = await fetch("/api/auth/login", {
       method: "POST",
@@ -208,11 +217,17 @@ export default function Home() {
     if (!lembrarLogin) setEmail("");
     setAutenticado(true);
     carregarLeads();
+    } catch { setErroLogin("Falha de conexao. Tente entrar novamente."); }
+    finally { setEnviandoAcesso(false); }
   }
 
   async function cadastrar(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (enviandoAcesso) return;
+    setEnviandoAcesso(true);
     setErroLogin("");
+    setMensagemLogin("");
+    try {
 
     const response = await fetch("/api/auth/register", {
       method: "POST",
@@ -225,10 +240,17 @@ export default function Home() {
       }),
     });
 
-    const data = (await response.json()) as { error?: string };
+    const data = (await response.json()) as { error?: string; requiresConfirmation?: boolean; message?: string };
 
     if (!response.ok) {
       setErroLogin(data.error ?? "Nao foi possivel criar a conta.");
+      return;
+    }
+
+    if (data.requiresConfirmation) {
+      setMensagemLogin(data.message ?? "Confira seu e-mail para confirmar o cadastro.");
+      setModoAcesso("login");
+      setSenha("");
       return;
     }
 
@@ -246,6 +268,8 @@ export default function Home() {
     setSenha("");
     setAutenticado(true);
     carregarLeads();
+    } catch { setErroLogin("Falha de conexao. Tente cadastrar novamente."); }
+    finally { setEnviandoAcesso(false); }
   }
 
   async function sair() {
@@ -397,13 +421,14 @@ export default function Home() {
           </div>
 
           <div className="mt-5 grid grid-cols-2 gap-2 rounded-lg bg-zinc-50 p-1">
-            {(["login"] as const).map((modo) => (
+            {(["login", "cadastro"] as const).map((modo) => (
               <button
                 key={modo}
                 type="button"
                 onClick={() => {
                   setModoAcesso(modo);
                   setErroLogin("");
+                  setMensagemLogin("");
                 }}
                 className={`rounded-md px-3 py-2 text-sm font-black ${
                   modoAcesso === modo
@@ -411,7 +436,7 @@ export default function Home() {
                     : "text-zinc-600"
                 }`}
               >
-                {modo === "login" ? "Entrar" : "Cadastrar"}
+                {modo === "login" ? "Entrar" : "Criar conta"}
               </button>
             ))}
           </div>
@@ -430,16 +455,17 @@ export default function Home() {
           ) : null}
 
           <label className="mt-5 grid gap-1.5 text-sm font-black text-zinc-800">
-            E-mail da equipe (opcional)
+            E-mail
             <input
               type="email"
               value={email}
               onChange={(event) => setEmail(event.target.value)}
               className="rounded-lg border border-zinc-300 px-4 py-3 text-sm font-semibold outline-none focus:border-[#9d1f16] focus:ring-2 focus:ring-[#f3c400]/40"
-              placeholder={modoAcesso === "login" ? "Administrador pode deixar vazio" : "voce@email.com"}
+              placeholder="voce@email.com"
               required={modoAcesso === "cadastro"}
             />
           </label>
+          {modoAcesso === "login" && <p className="mt-2 text-xs text-zinc-500">Para o acesso administrativo original, deixe o e-mail vazio.</p>}
 
           <label className="mt-5 grid gap-1.5 text-sm font-black text-zinc-800">
             Senha de acesso
@@ -448,7 +474,10 @@ export default function Home() {
               value={senha}
               onChange={(event) => setSenha(event.target.value)}
               className="rounded-lg border border-zinc-300 px-4 py-3 text-sm font-semibold outline-none focus:border-[#9d1f16] focus:ring-2 focus:ring-[#f3c400]/40"
-              placeholder={modoAcesso === "login" ? "Digite a senha" : "Minimo 6 caracteres"}
+              placeholder={modoAcesso === "login" ? "Digite a senha" : "Minimo 12 caracteres"}
+              minLength={modoAcesso === "cadastro" ? 12 : undefined}
+              maxLength={256}
+              autoComplete={modoAcesso === "cadastro" ? "new-password" : "current-password"}
               required
             />
           </label>
@@ -474,8 +503,10 @@ export default function Home() {
             </p>
           ) : null}
 
-          <button className="mt-5 w-full rounded-lg bg-[#9d1f16] px-5 py-3 text-sm font-black text-white">
-            {modoAcesso === "login" ? "Entrar" : "Criar conta"}
+          {mensagemLogin && <p role="status" className="mt-4 rounded-lg bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-900">{mensagemLogin}</p>}
+
+          <button disabled={enviandoAcesso} className="mt-5 w-full rounded-lg bg-[#9d1f16] px-5 py-3 text-sm font-black text-white disabled:opacity-60">
+            {enviandoAcesso ? "Aguarde..." : modoAcesso === "login" ? "Entrar" : "Criar conta"}
           </button>
 
           <Link href="/captacao" className="mt-4 block text-center text-sm font-black text-[#9d1f16]">

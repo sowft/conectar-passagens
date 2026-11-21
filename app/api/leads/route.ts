@@ -1,7 +1,7 @@
 import { captureLead } from "@/lib/intake";
 import { isAuthenticated } from "@/lib/session";
 import { LeadStatus, statusOrder } from "@/lib/leads";
-import { database } from "@/lib/server-db";
+import { sessionDatabase } from "@/lib/session-database";
 
 // Cast in PostgreSQL before JSON serialization: preserve bigint precision and
 // keep the same string ID contract for the prototype and newer UUID databases.
@@ -32,7 +32,7 @@ export async function GET() {
   if (!(await isAuthenticated())) return unauthorized();
 
   try {
-  const { data, error } = await database()
+  const { data, error } = await (await sessionDatabase())
     .from("leads")
     .select(leadColumns)
     .order("created_at", { ascending: false });
@@ -44,7 +44,7 @@ export async function GET() {
     );
   }
 
-  return Response.json({ leads: data ?? [] });
+  return Response.json({ leads: data ?? [] }, { headers: { "Cache-Control": "no-store, private" } });
   } catch { return Response.json({ error: "Configure o banco e a chave de servidor para carregar os leads." }, { status: 503 }); }
 }
 
@@ -90,7 +90,7 @@ export async function PATCH(request: Request) {
   }
 
   try {
-  const { data, error } = await database()
+  const { data, error } = await (await sessionDatabase())
     .from("leads")
     .update(update)
     .eq("id", body.id.trim())
@@ -104,6 +104,6 @@ export async function PATCH(request: Request) {
     );
   }
 
-  return Response.json({ lead: data });
+  return Response.json({ lead: data }, { headers: { "Cache-Control": "no-store, private" } });
   } catch { return Response.json({ error: "Nao foi possivel salvar no banco." }, { status: 503 }); }
 }

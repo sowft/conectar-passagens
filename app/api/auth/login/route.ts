@@ -1,71 +1,31 @@
 import { sessionCookie } from "@/lib/session";
-import { hashPassword, normalizeEmail } from "@/lib/auth";
-import { findLocalUser } from "@/lib/local-users";
-import { database } from "@/lib/server-db";
 import { hasAdminPassword } from "@/lib/admin-password";
 import { verifyCurrentAdminPassword } from "@/lib/admin-access";
+import { accountAuth, accountAuthConfigured, clearAccountCookies, sameOriginAccountRequest, setAccountPreference } from "@/lib/account-auth";
 
 export async function POST(request: Request) {
+  const headers = { "Cache-Control": "no-store, private" };
   const body = await request.json().catch(() => null);
-
-  if (!body || typeof body.password !== "string" || (body.email !== undefined && typeof body.email !== "string") || body.password.length > 256) {
-    return Response.json(
-      { error: "Informe a senha." },
-      { status: 400 },
-    );
+  if (!body || typeof body.password !== "string" || body.password.length > 256 || (body.email !== undefined && typeof body.email !== "string")) return Response.json({ error: "Informe e-mail e senha." }, { status: 400, headers });
+  const email = (body.email ?? "").trim().toLowerCase();
+  if (email) {
+    if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return Response.json({ error: "Informe um e-mail valido." }, { status: 400, headers });
+    if (!sameOriginAccountRequest(request)) return Response.json({ error: "Solicitacao invalida." }, { status: 403, headers });
+    if (!accountAuthConfigured()) return Response.json({ error: "O acesso por e-mail esta temporariamente indisponivel." }, { status: 503, headers });
+    try {
+      const client = await accountAuth(Boolean(body.remember));
+      const { error } = await client.auth.signInWithPassword({ email, password: body.password });
+      if (error) return Response.json({ error: error.code === "email_not_confirmed" ? "Confirme seu cadastro pelo link recebido no e-mail antes de entrar." : "E-mail ou senha invalidos. Se necessario, use Esqueci minha senha." }, { status: 401, headers });
+      await setAccountPreference(Boolean(body.remember));
+      return Response.json({ ok: true }, { headers });
+    } catch { return Response.json({ error: "Acesso indisponivel no momento." }, { status: 503, headers }); }
   }
-
-  if (!process.env.SESSION_SECRET || process.env.SESSION_SECRET.length < 32 || (!hasAdminPassword() && !process.env.SUPABASE_SECRET_KEY && !process.env.SUPABASE_SERVICE_ROLE_KEY)) return Response.json({ error: "O acesso ainda nao foi configurado. Neste computador, abra Configurar acesso local para criar sua senha." }, { status: 503 });
-
-  // The administrator is identified by its password; browser autofill may supply an email.
-  let credentialVersion = "";
+  // The original owner can still use the administrative password with email empty.
+  if (!process.env.SESSION_SECRET || process.env.SESSION_SECRET.length < 32 || !hasAdminPassword()) return Response.json({ error: "O acesso administrativo ainda nao foi configurado." }, { status: 503, headers });
   try {
     const admin = await verifyCurrentAdminPassword(body.password);
-    credentialVersion = admin.version;
-    if (admin.valid) return authenticatedResponse(Boolean(body.remember), admin.version);
-  } catch { return Response.json({ error: "Acesso temporariamente indisponivel. Tente novamente mais tarde." }, { status: 503 }); }
-
-  if (!body.email || (!process.env.SUPABASE_SECRET_KEY && !process.env.SUPABASE_SERVICE_ROLE_KEY)) {
-    return Response.json(
-      { error: "Senha invalida." },
-      { status: 401 },
-    );
-  }
-
-  const email = normalizeEmail(body.email);
-  const passwordHash = hashPassword(email, body.password);
-  try {
-  const { data, error } = await database()
-    .from("usuarios")
-    .select("id")
-    .eq("email", email)
-    .eq("password_hash", passwordHash)
-    .maybeSingle();
-
-  if (error || !data) {
-    const localUser = await findLocalUser(email, passwordHash);
-
-    if (localUser) {
-      return authenticatedResponse(Boolean(body.remember), credentialVersion);
-    }
-
-    return Response.json(
-      { error: "E-mail ou senha invalidos." },
-      { status: 401 },
-    );
-  }
-
-  return authenticatedResponse(Boolean(body.remember), credentialVersion);
-  } catch { return Response.json({ error: "Acesso indisponivel. Confira a configuracao do servidor." }, { status: 503 }); }
-}
-
-function authenticatedResponse(remember: boolean, version = "") {
-  return Response.json(
-    { ok: true },
-    {
-      headers: {
-        "Set-Cookie": sessionCookie(remember, version),
-      },
-    },
-  );
+    if (!admin.valid) return Response.json({ error: "Senha invalida." }, { status: 401, headers });
+    await clearAccountCookies();
+    return Response.json({ ok: true }, { headers: { ...headers, "Set-Cookie": sessionCookie(Boolean(body.remember), admin.version) } });
+  } catch { return Response.json({ error: "Acesso temporariamente indisponivel. Tente novamente mais tarde." }, { status: 503, headers }); }
 }

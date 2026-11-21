@@ -1,12 +1,12 @@
 import { isAuthenticated } from "@/lib/session";
-import { database } from "@/lib/server-db";
+import { sessionDatabase } from "@/lib/session-database";
 
 export async function GET() {
   if (!await isAuthenticated()) return Response.json({ error: "Entre para continuar." }, { status: 401 });
   try {
-    const { data, error } = await database().from("campaigns").select("*").order("created_at", { ascending: false });
+    const { data, error } = await (await sessionDatabase()).from("campaigns").select("*").order("created_at", { ascending: false });
     if (error) throw error;
-    return Response.json({ campaigns: data });
+    return Response.json({ campaigns: data }, { headers: { "Cache-Control": "no-store, private" } });
   } catch {
     return Response.json({ error: "Campanhas indisponiveis. Confira a configuracao do servidor e execute a migracao SQL." }, { status: 503 });
   }
@@ -19,7 +19,7 @@ export async function POST(request: Request) {
     return Response.json({ error: "Preencha o publico, a regiao e ao menos um canal." }, { status: 400 });
   }
   try {
-    const { data, error } = await database().from("campaigns").insert({ nome: `${body.produto} — ${body.regiao}`, produto: body.produto, publico: body.publico, regiao: body.regiao, perfil: body.perfil, canais: body.canais }).select().single();
+    const { data, error } = await (await sessionDatabase()).from("campaigns").insert({ nome: `${body.produto} — ${body.regiao}`, produto: body.produto, publico: body.publico, regiao: body.regiao, perfil: body.perfil, canais: body.canais }).select().single();
     if (error) throw error;
     return Response.json({ campaign: data }, { status: 201 });
   } catch {
@@ -32,7 +32,7 @@ export async function PATCH(request: Request) {
   const body = await request.json().catch(() => null);
   if (!body || typeof body.id !== "string" || !["ativa", "pausada"].includes(body.status)) return Response.json({ error: "Campanha invalida." }, { status: 400 });
   try {
-    const { data, error } = await database().from("campaigns").update({ status: body.status }).eq("id", body.id).select().single();
+    const { data, error } = await (await sessionDatabase()).from("campaigns").update({ status: body.status }).eq("id", body.id).select().single();
     if (error) throw error;
     return Response.json({ campaign: data });
   } catch {

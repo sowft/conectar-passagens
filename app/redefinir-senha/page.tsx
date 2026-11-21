@@ -13,9 +13,12 @@ export default function ResetPasswordPage() {
   useEffect(() => {
     const timer = window.setTimeout(() => {
       const value = new URLSearchParams(window.location.hash.slice(1)).get("token") ?? "";
-      setToken(/^[a-f0-9]{64}$/.test(value) ? value : "");
+      const account = new URLSearchParams(window.location.search).get("conta") === "1";
+      if (account) {
+        fetch("/api/auth/reset", { cache: "no-store" }).then(response => response.json()).then(data => setToken(data.authenticated ? "account" : "")).catch(() => setToken(""));
+      } else setToken(/^[a-f0-9]{64}$/.test(value) ? value : "");
       // Keep it in memory only, away from history and subsequent referrers.
-      window.history.replaceState(null, "", window.location.pathname);
+      window.history.replaceState(null, "", window.location.pathname + (account ? "?conta=1" : ""));
     }, 0);
     return () => window.clearTimeout(timer);
   }, []);
@@ -26,7 +29,7 @@ export default function ResetPasswordPage() {
     if (password !== confirmation) { setError("As senhas precisam ser iguais."); return; }
     setBusy(true);
     try {
-      const response = await fetch("/api/auth/reset", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token, password }) });
+      const response = await fetch("/api/auth/reset", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(token === "account" ? { mode: "account", password } : { token, password }) });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error ?? "Nao foi possivel redefinir a senha.");
       setDone(true); setToken(""); setPassword(""); setConfirmation("");
@@ -37,7 +40,7 @@ export default function ResetPasswordPage() {
     <section className="w-full max-w-md rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
       <Link href="/" className="font-bold text-[#9d1f16]">Conectar Passagens</Link>
       <h1 className="mt-6 text-2xl font-black">Definir nova senha</h1>
-      {done ? <div role="status"><p className="mt-4 leading-7">Senha atualizada. Entre novamente com a nova senha, deixando o e-mail vazio. As sessoes anteriores foram encerradas.</p><Link href="/" className="mt-6 inline-block rounded-lg bg-[#9d1f16] px-5 py-3 font-bold text-white">Entrar</Link></div> : token === null ? <p className="mt-5">Verificando link...</p> : !token ? <p className="mt-5 leading-7">Abra o link completo recebido por e-mail ou <Link href="/recuperar-senha" className="font-bold text-[#9d1f16]">solicite outro link</Link>.</p> : <form onSubmit={submit} className="mt-6 grid gap-4">
+      {done ? <div role="status"><p className="mt-4 leading-7">Senha atualizada. Entre novamente com seu e-mail e a nova senha. Se voce recuperou o acesso administrativo, deixe o e-mail vazio.</p><Link href="/" className="mt-6 inline-block rounded-lg bg-[#9d1f16] px-5 py-3 font-bold text-white">Entrar</Link></div> : token === null ? <p className="mt-5">Verificando link...</p> : !token ? <p className="mt-5 leading-7">Abra o link completo recebido por e-mail ou <Link href="/recuperar-senha" className="font-bold text-[#9d1f16]">solicite outro link</Link>.</p> : <form onSubmit={submit} className="mt-6 grid gap-4">
         <label className="grid gap-2 font-bold">Nova senha<input type="password" autoComplete="new-password" minLength={12} maxLength={256} required value={password} onChange={event => setPassword(event.target.value)} className="rounded-lg border border-zinc-300 px-4 py-3 font-normal" /></label>
         <p className="text-sm text-zinc-600">Use pelo menos 12 caracteres.</p>
         <label className="grid gap-2 font-bold">Confirmar nova senha<input type="password" autoComplete="new-password" minLength={12} maxLength={256} required value={confirmation} onChange={event => setConfirmation(event.target.value)} className="rounded-lg border border-zinc-300 px-4 py-3 font-normal" /></label>
