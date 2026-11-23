@@ -510,3 +510,47 @@ test("operation readiness detects the Vercel URL while preserving genuine pendin
     assert.equal(invalid.captureReady, false); assert.equal(invalid.checks.find(check => check.name === "Endereco publico").ok, false);
   } finally { for (const [key, value] of Object.entries(previous)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; } }
 });
+
+test("social lead links allow only canonical Facebook group posts and Instagram publications", () => {
+  const { socialPostUrl, leadPostUrl } = load("lib/social-leads.ts");
+  const url = "https://www.facebook.com/groups/123/posts/456";
+  assert.equal(socialPostUrl(url + "/?tracking=abc"), url);
+  for (const invalid of ["javascript:alert(1)", "https://facebook.com.evil.test/groups/123/posts/456", "https://user:pass@facebook.com/groups/123/posts/456", "https://www.facebook.com/profile.php?id=1", "https://instagram.com/p/x/extra"]) assert.equal(socialPostUrl(invalid), null);
+  assert.equal(leadPostUrl(`Publicacao: ${url}\nData da publicacao: ha 3 dias`), url);
+});
+
+test("social imports enforce authentication, same origin and campaign ownership", async () => {
+  let auth = false, admin = false, ownCampaign = false, writes = 0;
+  const query = { select: () => query, eq: () => query, is: () => query, like: () => query, maybeSingle: async () => ({ data: ownCampaign ? { id: "x" } : null }), limit: async () => ({ data: [] }) };
+  const route = load("app/api/leads/social/route.ts", {
+    "@/lib/session": { isAuthenticated: async () => auth, isAdminAuthenticated: async () => admin },
+    "@/lib/account-auth": { sameOriginAccountRequest: r => r.headers.get("origin") === "https://app.example" },
+    "@/lib/session-database": { sessionDatabase: async () => ({ from: () => query }) },
+    "@/lib/server-db": { database: () => ({ from: () => ({ insert: async () => { writes++; return {}; } }) }) },
+  });
+  const body = { nome: "Pessoa", url: "https://facebook.com/groups/123/posts/456", campaign_id: "12345678-1234-1234-1234-123456789abc" };
+  const request = (origin = "https://app.example") => new Request("https://app.example/api/leads/social", { method: "POST", headers: { origin }, body: JSON.stringify(body) });
+  assert.equal((await route.POST(request())).status, 401);
+  auth = true;
+  assert.equal((await route.POST(request("https://evil.example"))).status, 403);
+  assert.equal((await route.POST(request())).status, 403); assert.equal(writes, 0);
+  ownCampaign = true;
+  assert.equal((await route.POST(request())).status, 201); assert.equal(writes, 1);
+});
+
+test("social imports preserve unknown contact and consent, and skip existing posts", async () => {
+  let record; let duplicate = false;
+  const query = { select: () => query, is: () => query, like: () => query, limit: async () => ({ data: duplicate ? [{ id: "1" }] : [] }) };
+  const route = load("app/api/leads/social/route.ts", {
+    "@/lib/session": { isAuthenticated: async () => true, isAdminAuthenticated: async () => true },
+    "@/lib/account-auth": { sameOriginAccountRequest: () => true },
+    "@/lib/session-database": { sessionDatabase: async () => ({ from: () => query }) },
+    "@/lib/server-db": { database: () => ({ from: () => ({ insert: async value => { record = value; return {}; } }) }) },
+  });
+  const request = () => new Request("https://app.example", { method: "POST", body: JSON.stringify({ nome: "Pessoa", url: "https://facebook.com/groups/123/posts/456", destino: "Recife", data_publicacao: "ha 3 dias" }) });
+  assert.equal((await route.POST(request())).status, 201);
+  assert.equal(record.telefone, ""); assert.equal(record.consentimento_em, null); assert.equal(record.data_viagem, null); assert.equal(record.destino, "Recife");
+  assert.match(record.observacoes, /Publicacao: https/); assert.equal(record.fonte, "Facebook - pedido publico");
+  record = undefined; duplicate = true;
+  assert.equal((await (await route.POST(request())).json()).existing, true); assert.equal(record, undefined);
+});

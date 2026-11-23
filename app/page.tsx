@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import CompanySearch from "@/components/CompanySearch";
+import SocialLeadImport from "@/components/SocialLeadImport";
+import { leadPostUrl } from "@/lib/social-leads";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import CampaignManager from "@/components/CampaignManager";
 import AppOpening from "@/components/AppOpening";
@@ -983,7 +985,7 @@ function OportunidadesView({
         <PageTitle
           eyebrow="Pessoas interessadas"
           title="Leads recebidos"
-          description="Contatos enviados pelos formularios das suas campanhas. A lista e atualizada automaticamente a cada 20 segundos."
+          description="Pedidos publicos de redes sociais e contatos dos formularios, incluindo interesses antigos. A lista e atualizada a cada 20 segundos."
         />
         <button onClick={recarregar} className="rounded-lg border border-zinc-300 bg-white px-4 py-2.5 text-sm font-black">
           Atualizar lista
@@ -994,6 +996,7 @@ function OportunidadesView({
         <button onClick={abrirCampanhas} className="text-sm font-bold text-[#9d1f16]">Copiar link de captacao</button>
       </div>
 
+      <SocialLeadImport onSaved={recarregar} />
       <section className="rounded-lg bg-white p-5 shadow-sm">
         <div className="grid gap-3 md:grid-cols-[1.2fr_0.8fr_0.8fr] xl:grid-cols-[1.4fr_0.75fr_0.75fr_0.75fr_0.75fr_auto]">
           <input
@@ -1157,15 +1160,14 @@ function LeadCard({
 
       <div className="mt-4 grid gap-1 text-sm text-zinc-600">
         <p>Viagem: {formatDate(lead.data_viagem)}</p>
-        <p>WhatsApp: {lead.telefone}</p>
+        <p>WhatsApp: {lead.telefone || "Nao informado"}</p>
+        {leadPostUrl(lead.observacoes) && <><p>Pedido publico; interesse atual nao confirmado.</p><p>{lead.observacoes?.match(/^Data da publicacao: (.+)$/m)?.[0]}</p></>}
         <p>Recebido: {formatRelativeDate(lead.created_at)}</p>
         <p>Observacoes: {lead.observacoes ? "registradas" : "nenhuma"}</p>
       </div>
 
       <div className="mt-4 grid grid-cols-3 gap-2">
-        <a href={whatsAppUrl(lead)} target="_blank" rel="noreferrer" className="rounded-lg bg-zinc-950 px-3 py-2.5 text-center text-sm font-black text-[#f3c400] transition hover:bg-[#9d1f16] hover:text-white">
-          WhatsApp
-        </a>
+        <LeadContact lead={lead} />
         <select
           value={lead.status}
           onChange={(e) => atualizarStatus(lead.id, e.target.value as LeadStatus)}
@@ -1236,7 +1238,7 @@ function LeadDetailsModal({
         </div>
 
         <div className="mt-5 grid gap-3 sm:grid-cols-2">
-          <InfoItem label="WhatsApp" value={lead.telefone} />
+          <InfoItem label="WhatsApp" value={lead.telefone || "Nao informado"} />
           <InfoItem label="Fonte" value={lead.fonte} />
           <InfoItem label="Viagem" value={formatDate(lead.data_viagem)} />
           <InfoItem label="Recebido" value={formatRelativeDate(lead.created_at)} />
@@ -1269,14 +1271,7 @@ function LeadDetailsModal({
         </label>
 
         <div className="mt-5 flex flex-col gap-3 sm:flex-row">
-          <a
-            href={whatsAppUrl(lead)}
-            target="_blank"
-            rel="noreferrer"
-            className="rounded-lg bg-zinc-950 px-5 py-3 text-center text-sm font-black text-[#f3c400]"
-          >
-            Chamar no WhatsApp
-          </a>
+          <LeadContact lead={lead} />
           <button
             type="button"
             onClick={() => salvarObservacoes(observacoes)}
@@ -1505,4 +1500,11 @@ function NavButton({
 
 function Card({ numero, texto }: { numero: number; texto: string }) {
   return <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-3"><strong className="block text-2xl font-black text-[#9d1f16]">{numero}</strong><span className="text-xs font-semibold text-zinc-600">{texto}</span></div>;
+}
+
+function LeadContact({ lead }: { lead: Lead }) {
+  const url = leadPostUrl(lead.observacoes);
+  const hasPhone = lead.telefone.replace(/\D/g, "").length >= 10;
+  if (!url && !hasPhone) return <span className="self-center text-sm text-zinc-500">Contato nao informado</span>;
+  return <a href={url || whatsAppUrl(lead)} target="_blank" rel="noopener noreferrer" className="rounded-lg bg-zinc-950 px-3 py-2.5 text-center text-sm font-black text-[#f3c400]">{url ? "Ver publicacao" : "WhatsApp"}</a>;
 }
