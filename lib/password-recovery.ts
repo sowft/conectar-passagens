@@ -1,11 +1,12 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { database } from "@/lib/server-db";
 import { encodeAdminPassword } from "@/lib/admin-password";
+import { publicAppUrl } from "@/lib/public-url";
 
 export const recoveryMessage = "Se o e-mail corresponder ao acesso administrativo, voce recebera as instrucoes. Confira tambem o spam. Aguarde um minuto antes de tentar novamente.";
 export function recoveryConfiguration() {
   try {
-    const origin = new URL(process.env.PUBLIC_APP_URL ?? "");
+    const origin = new URL(publicAppUrl() ?? "");
     const email = process.env.ADMIN_RECOVERY_EMAIL?.trim().toLowerCase();
     if (origin.protocol !== "https:" || !email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !process.env.RESEND_API_KEY || !process.env.RESEND_FROM_EMAIL || !process.env.NEXT_PUBLIC_SUPABASE_URL || !(process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY)) return null;
     return { origin: origin.origin, email, key: process.env.RESEND_API_KEY, from: process.env.RESEND_FROM_EMAIL };

@@ -1,12 +1,13 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { publicAppUrl } from "@/lib/public-url";
 
 export function accountAuthConfigured() {
   return Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && (process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY));
 }
 
 export function appOrigin(request: Request) {
-  return new URL(process.env.PUBLIC_APP_URL || request.url).origin;
+  return publicAppUrl() ?? new URL(process.env.PUBLIC_APP_URL || request.url).origin;
 }
 
 export function accountRedirect(url: string) {

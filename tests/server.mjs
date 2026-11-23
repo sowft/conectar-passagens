@@ -484,3 +484,29 @@ test("email delivery restrictions explain the missing setup instead of looking l
   assert.match(accountEmailError({ code: "signup_disabled" }, "fallback"), /desativado/);
   assert.equal(accountEmailError({ code: "unknown" }, "fallback"), "fallback");
 });
+
+test("public address uses trusted deployment settings and rejects local or invalid configuration", () => {
+  const { publicAppUrl } = load("lib/public-url.ts");
+  assert.equal(publicAppUrl({ PUBLIC_APP_URL: "https://app.example/path", VERCEL_PROJECT_PRODUCTION_URL: "production.vercel.app" }), "https://app.example");
+  assert.equal(publicAppUrl({ VERCEL_PROJECT_PRODUCTION_URL: "production.vercel.app", VERCEL_URL: "temporary.vercel.app" }), "https://production.vercel.app");
+  assert.equal(publicAppUrl({ VERCEL_URL: "temporary.vercel.app" }), "https://temporary.vercel.app");
+  for (const url of ["invalid", "http://app.example", "https://localhost", "https://127.0.0.1", "https://192.168.1.1", "https://user:password@app.example"]) assert.equal(publicAppUrl({ PUBLIC_APP_URL: url, VERCEL_PROJECT_PRODUCTION_URL: "production.vercel.app" }), null);
+  assert.equal(publicAppUrl({}), null);
+});
+
+test("operation readiness detects the Vercel URL while preserving genuine pending checks", async () => {
+  const values = { PUBLIC_APP_URL: undefined, VERCEL_PROJECT_PRODUCTION_URL: "conectar-passagens.vercel.app", VERCEL_URL: undefined, ADMIN_PASSWORD: "admin-test-password", ADMIN_PASSWORD_HASH: undefined, SESSION_SECRET: "s".repeat(64), NEXT_PUBLIC_SUPABASE_URL: "https://db.example", SUPABASE_SECRET_KEY: "test" };
+  const previous = Object.fromEntries(Object.keys(values).map(key => [key, process.env[key]]));
+  try {
+    for (const [key, value] of Object.entries(values)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; }
+    const db = { from: () => ({ select: () => ({ limit: limit => { assert.equal(limit, 0); return { abortSignal: async () => ({ error: null }) }; } }) }), rpc: () => ({ abortSignal: async () => ({ error: null }) }) };
+    const route = load("app/api/operation/route.ts", { "@/lib/session": { isAuthenticated: async () => true }, "@/lib/server-db": { database: () => db } });
+    const result = await (await route.GET()).json();
+    assert.equal(result.captureReady, true);
+    const address = result.checks.find(check => check.name === "Endereco publico");
+    assert.equal(address.ok, true); assert.match(address.detail, /https:\/\/conectar-passagens.vercel.app/);
+    process.env.PUBLIC_APP_URL = "https://localhost";
+    const invalid = await (await route.GET()).json();
+    assert.equal(invalid.captureReady, false); assert.equal(invalid.checks.find(check => check.name === "Endereco publico").ok, false);
+  } finally { for (const [key, value] of Object.entries(previous)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; } }
+});

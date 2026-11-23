@@ -1,5 +1,7 @@
 # Ativacao da prospeccao
 
+O endereco publico e reconhecido por `PUBLIC_APP_URL`, quando definido, ou pelas variaveis de sistema `VERCEL_PROJECT_PRODUCTION_URL` e `VERCEL_URL` fornecidas pela Vercel. A mesma resolucao e usada na verificacao de ativacao e nos links de autenticacao. Uma URL explicita invalida continua aparecendo como pendencia; o sistema nao considera localhost um endereco publico. Dominio proprio pode ser definido em `PUBLIC_APP_URL`.
+
 ## Contas individuais e recuperacao para qualquer e-mail
 
 O cadastro e a redefinicao de contas individuais aceitam senhas a partir de 6 caracteres. A politica de senha do Supabase tambem precisa permitir esse minimo. O acesso administrativo original mantem sua configuracao separada.

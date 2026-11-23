@@ -14,8 +14,9 @@ report('Chave privada do Supabase', Boolean(key), key ? 'configurada; valor ocul
 report('Senha administrativa', Boolean((env.ADMIN_PASSWORD && env.ADMIN_PASSWORD.length >= 12) || /^scrypt:[a-f0-9]{32}:[a-f0-9]{128}$/.test(env.ADMIN_PASSWORD_HASH || '')));
 report('Assinatura das sessoes', Boolean(env.SESSION_SECRET && env.SESSION_SECRET.length >= 32));
 let publicUrl = false;
-try { const parsed = new URL(env.PUBLIC_APP_URL || ''); publicUrl = parsed.protocol === 'https:' && parsed.hostname !== 'localhost'; } catch {}
-report('Endereco publico HTTPS', publicUrl, 'configure PUBLIC_APP_URL na hospedagem; disponibilidade externa precisa de teste real');
+const publicAddress = env.PUBLIC_APP_URL || (env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${env.VERCEL_PROJECT_PRODUCTION_URL}` : env.VERCEL_URL ? `https://${env.VERCEL_URL}` : '');
+try { const parsed = new URL(publicAddress); publicUrl = parsed.protocol === 'https:' && parsed.hostname !== 'localhost' && !parsed.hostname.endsWith('.localhost') && !parsed.username && !parsed.password; } catch {}
+report('Endereco publico HTTPS', publicUrl, publicUrl ? `endereco reconhecido: ${new URL(publicAddress).origin}` : 'configure PUBLIC_APP_URL na hospedagem; disponibilidade externa precisa de teste real');
 report('Busca Google', Boolean(env.GOOGLE_PLACES_API_KEY), env.GOOGLE_PLACES_API_KEY ? 'chave presente; uma busca real ainda precisa validar a API e a cota' : 'falta GOOGLE_PLACES_API_KEY');
 if (url && key) {
   try {

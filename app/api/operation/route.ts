@@ -1,5 +1,6 @@
 import { isAuthenticated } from "@/lib/session";
 import { database } from "@/lib/server-db";
+import { publicAppUrl } from "@/lib/public-url";
 
 export async function GET() {
   if (!await isAuthenticated()) return Response.json({ error: "Entre para continuar." }, { status: 401 });
@@ -8,9 +9,8 @@ export async function GET() {
   const configured = Boolean(env.NEXT_PUBLIC_SUPABASE_URL && (env.SUPABASE_SECRET_KEY || env.SUPABASE_SERVICE_ROLE_KEY));
   checks.push({ name: "Banco de dados", ok: configured, detail: configured ? "Credenciais presentes; verificando estrutura abaixo." : "Crie o projeto Supabase e configure a URL e a chave privada." });
   checks.push({ name: "Acesso administrativo", ok: Boolean(((env.ADMIN_PASSWORD && env.ADMIN_PASSWORD.length >= 12) || /^scrypt:[a-f0-9]{32}:[a-f0-9]{128}$/.test(env.ADMIN_PASSWORD_HASH ?? "")) && env.SESSION_SECRET && env.SESSION_SECRET.length >= 32), detail: "Exige senha de pelo menos 12 caracteres e assinatura de sessao configuradas." });
-  let publicUrl = false;
-  try { const url = new URL(env.PUBLIC_APP_URL ?? ""); publicUrl = url.protocol === "https:" && url.hostname !== "localhost"; } catch { /* Unconfigured */ }
-  checks.push({ name: "Endereco publico", ok: publicUrl, detail: "Configure PUBLIC_APP_URL com o endereco HTTPS da hospedagem. A presenca do endereco nao comprova disponibilidade externa." });
+  const publicUrl = publicAppUrl();
+  checks.push({ name: "Endereco publico", ok: Boolean(publicUrl), detail: publicUrl ? `Endereco HTTPS reconhecido: ${publicUrl}.` : "Nao foi possivel identificar um endereco publico HTTPS. Confira PUBLIC_APP_URL ou a configuracao da hospedagem." });
   if (configured) {
     const tables = { leads: "id,visit_id,campaign_id,consentimento_em", campaigns: "id,canais,status", campaign_visits: "id,campaign_id,fonte", purchase_clicks: "visit_id" };
     await Promise.all(Object.entries(tables).map(async ([table, fields]) => {

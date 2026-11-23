@@ -1,10 +1,12 @@
 import { recoveryConfiguration, recoveryMessage, requestPasswordRecovery, sameOriginJson } from "@/lib/password-recovery";
 import { accountAuth, accountAuthConfigured, appOrigin, sameOriginAccountRequest } from "@/lib/account-auth";
 import { accountEmailError, inspectAccountConfiguration } from "@/lib/auth-diagnostics";
+import { publicAppUrl } from "@/lib/public-url";
 
 const headers = { "Cache-Control": "no-store" };
 export async function GET() {
-  return Response.json(await inspectAccountConfiguration(), { headers });
+  const publicUrl = publicAppUrl();
+  return Response.json({ ...await inspectAccountConfiguration(), ...(publicUrl ? { publicUrl } : {}) }, { headers });
 }
 export async function POST(request: Request) {
   if (!sameOriginAccountRequest(request)) return Response.json({ error: "Solicitacao invalida. Abra a recuperacao pelo aplicativo." }, { status: 403, headers });
