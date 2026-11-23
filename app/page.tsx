@@ -985,7 +985,7 @@ function OportunidadesView({
         <PageTitle
           eyebrow="Pessoas interessadas"
           title="Leads recebidos"
-          description="Pedidos publicos de redes sociais e contatos dos formularios, incluindo interesses antigos. A lista e atualizada a cada 20 segundos."
+          description="A colecao compartilhada de pedidos publicos aparece para todas as contas, incluindo interesses antigos. Contatos dos seus formularios ficam na sua conta."
         />
         <button onClick={recarregar} className="rounded-lg border border-zinc-300 bg-white px-4 py-2.5 text-sm font-black">
           Atualizar lista
@@ -1154,7 +1154,7 @@ function LeadCard({
           </p>
         </div>
         <span className={`rounded-full px-3 py-1 text-xs font-black ${statusClass(lead.status)}`}>
-          {statusLabels[lead.status]}
+          {lead.somente_leitura ? "Compartilhado" : statusLabels[lead.status]}
         </span>
       </div>
 
@@ -1163,12 +1163,13 @@ function LeadCard({
         <p>WhatsApp: {lead.telefone || "Nao informado"}</p>
         {leadPostUrl(lead.observacoes) && <><p>Pedido publico; interesse atual nao confirmado.</p><p>{lead.observacoes?.match(/^Data da publicacao: (.+)$/m)?.[0]}</p></>}
         <p>Recebido: {formatRelativeDate(lead.created_at)}</p>
-        <p>Observacoes: {lead.observacoes ? "registradas" : "nenhuma"}</p>
+        <p>{lead.somente_leitura ? "Pedido publico visivel a todas as contas" : `Observacoes: ${lead.observacoes ? "registradas" : "nenhuma"}`}</p>
       </div>
 
       <div className="mt-4 grid grid-cols-3 gap-2">
         <LeadContact lead={lead} />
         <select
+          disabled={lead.somente_leitura}
           value={lead.status}
           onChange={(e) => atualizarStatus(lead.id, e.target.value as LeadStatus)}
           className="rounded-lg border border-zinc-300 px-3 py-2.5 text-sm font-bold outline-none"
@@ -1247,6 +1248,7 @@ function LeadDetailsModal({
         <label className="mt-5 grid gap-1.5 text-sm font-black text-zinc-800">
           Status
           <select
+            disabled={lead.somente_leitura}
             value={lead.status}
             onChange={(event) => atualizarStatus(event.target.value as LeadStatus)}
             className="rounded-lg border border-zinc-300 px-4 py-3 text-sm font-semibold outline-none focus:border-[#9d1f16] focus:ring-2 focus:ring-[#f3c400]/40"
@@ -1260,8 +1262,9 @@ function LeadDetailsModal({
         </label>
 
         <label className="mt-5 grid gap-1.5 text-sm font-black text-zinc-800">
-          Observacoes internas
+          {lead.somente_leitura ? "Dados da publicacao compartilhada" : "Observacoes internas"}
           <textarea
+            readOnly={lead.somente_leitura}
             value={observacoes}
             onChange={(event) => setObservacoes(event.target.value)}
             rows={6}
@@ -1274,6 +1277,7 @@ function LeadDetailsModal({
           <LeadContact lead={lead} />
           <button
             type="button"
+            disabled={lead.somente_leitura}
             onClick={() => salvarObservacoes(observacoes)}
             className="rounded-lg bg-[#9d1f16] px-5 py-3 text-sm font-black text-white"
           >
@@ -1319,7 +1323,7 @@ function LeadMiniCard({
         <span className="text-xs font-black text-[#9d1f16]">{formatRelativeDate(lead.created_at)}</span>
       </div>
       <p className="mt-2 text-sm text-zinc-600">Viagem: {formatDate(lead.data_viagem)}</p>
-      {nextStatus && atualizarStatus ? (
+      {nextStatus && atualizarStatus && !lead.somente_leitura ? (
         <button
           onClick={() => atualizarStatus(lead.id, nextStatus)}
             className="mt-3 w-full rounded-lg border border-[#9d1f16]/25 bg-white px-3 py-2 text-xs font-black text-[#9d1f16] transition hover:bg-[#9d1f16] hover:text-white"

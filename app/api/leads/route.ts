@@ -2,6 +2,7 @@ import { captureLead } from "@/lib/intake";
 import { isAuthenticated } from "@/lib/session";
 import { LeadStatus, statusOrder } from "@/lib/leads";
 import { sessionDatabase } from "@/lib/session-database";
+import { sharedSocialLeads, mergeVisibleLeads } from "@/lib/shared-social-leads";
 
 // Cast in PostgreSQL before JSON serialization: preserve bigint precision and
 // keep the same string ID contract for the prototype and newer UUID databases.
@@ -44,7 +45,8 @@ export async function GET() {
     );
   }
 
-  return Response.json({ leads: data ?? [] }, { headers: { "Cache-Control": "no-store, private" } });
+  const shared = await sharedSocialLeads();
+  return Response.json({ leads: mergeVisibleLeads(data ?? [], shared) }, { headers: { "Cache-Control": "no-store, private" } });
   } catch { return Response.json({ error: "Configure o banco e a chave de servidor para carregar os leads." }, { status: 503 }); }
 }
 

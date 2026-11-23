@@ -2,6 +2,7 @@ export type LeadStatus = "novo" | "qualificado" | "contatado" | "convertido";
 
 export type Lead = {
   id: string;
+  somente_leitura?: boolean;
   campaign_id?: string | null;
   nome: string;
   telefone: string;

@@ -20,7 +20,7 @@ test("lead listing and status updates preserve legacy bigint and UUID identifier
         return Response.json(init.method === "PATCH" ? lead : [lead]);
       } },
     });
-    const route = load("app/api/leads/route.ts", { "@/lib/session": { isAuthenticated: async () => true }, "@/lib/session-database": { sessionDatabase: async () => db } });
+    const route = load("app/api/leads/route.ts", { "@/lib/session": { isAuthenticated: async () => true }, "@/lib/session-database": { sessionDatabase: async () => db }, "@/lib/shared-social-leads": { sharedSocialLeads: async () => [], mergeVisibleLeads: own => own } });
     const listing = await route.GET(); assert.equal(listing.status, 200); assert.equal((await listing.json()).leads[0].id, id);
     const updated = await route.PATCH(new Request("https://app.example/api/leads", { method: "PATCH", body: JSON.stringify({ id, status: "qualificado" }) }));
     assert.equal(updated.status, 200); assert.equal((await updated.json()).lead.id, id);
@@ -553,4 +553,38 @@ test("social imports preserve unknown contact and consent, and skip existing pos
   assert.match(record.observacoes, /Publicacao: https/); assert.equal(record.fonte, "Facebook - pedido publico");
   record = undefined; duplicate = true;
   assert.equal((await (await route.POST(request())).json()).existing, true); assert.equal(record, undefined);
+});
+
+test("shared social collection excludes campaign leads and strips private fields", async () => {
+  const calls = [];
+  const query = { select: value => { calls.push(["select", value]); return query; }, is: (key, value) => { calls.push([key, value]); return query; }, in: (key, value) => { calls.push([key, value]); return query; }, order: async () => ({ data: [
+    { id: "1", nome: "Pessoa", origem: "Nao informada", destino: "Recife", fonte: "Facebook - pedido publico", created_at: "2026-11-23T00:00:00Z", telefone: "27999999999", status: "convertido", observacoes: "Publicacao: https://www.facebook.com/groups/123/posts/456\nANOTACAO PRIVADA" },
+    { id: "2", observacoes: "Pedido sem publicacao verificavel" }
+  ] }) };
+  const shared = load("lib/shared-social-leads.ts", { "@/lib/server-db": { database: () => ({ from: () => query }) } });
+  const rows = await shared.sharedSocialLeads();
+  assert.equal(rows.length, 1); assert.equal(rows[0].telefone, ""); assert.equal(rows[0].status, "novo"); assert.equal(rows[0].somente_leitura, true);
+  assert.ok(!JSON.stringify(rows).includes("ANOTACAO PRIVADA"));
+  assert.ok(calls.some(([key, value]) => key === "campaign_id" && value === null));
+  assert.ok(calls.some(([key, value]) => key === "consentimento_em" && value === null));
+  assert.deepEqual(calls.find(([key]) => key === "fonte")[1], ["Facebook - pedido publico", "Instagram - pedido publico"]);
+  const own = { id: "1", nome: "Meu registro", created_at: "2026-11-23T00:00:00Z" };
+  assert.deepEqual(shared.mergeVisibleLeads([own], rows), [own]);
+});
+
+test("every authenticated workspace sees shared posts even when its own lead list is empty", async () => {
+  let authenticated = false;
+  const shared = [{ id: "shared-1", nome: "Pedido publico", created_at: "2026-11-23T00:00:00Z", somente_leitura: true }];
+  const actual = load("lib/shared-social-leads.ts");
+  const query = { select: () => query, order: async () => ({ data: [], error: null }) };
+  const route = load("app/api/leads/route.ts", {
+    "@/lib/session": { isAuthenticated: async () => authenticated },
+    "@/lib/session-database": { sessionDatabase: async () => ({ from: () => query }) },
+    "@/lib/shared-social-leads": { sharedSocialLeads: async () => shared, mergeVisibleLeads: actual.mergeVisibleLeads }
+  });
+  assert.equal((await route.GET()).status, 401);
+  authenticated = true;
+  const response = await route.GET();
+  assert.equal(response.status, 200); assert.deepEqual((await response.json()).leads, shared);
+  assert.equal(response.headers.get("Cache-Control"), "no-store, private");
 });
