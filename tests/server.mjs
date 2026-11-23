@@ -451,3 +451,36 @@ test("confirmation callbacks reject external redirects and verify email tokens w
   const signup = await callback.GET(new Request("https://app.example/auth/callback?code=test&next=https://evil.example"));
   assert.equal(signup.headers.get("location"), "https://app.example/?confirmado=1");
 });
+
+test("public key diagnostics validate the provider and never disclose credentials", async () => {
+  const keys = ["NEXT_PUBLIC_SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_ANON_KEY", "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"];
+  const previous = Object.fromEntries(keys.map(key => [key, process.env[key]]));
+  const originalFetch = global.fetch;
+  try {
+    process.env.NEXT_PUBLIC_SUPABASE_URL = "https://project.example";
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = "public-test-key";
+    delete process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+    const { inspectAccountConfiguration } = load("lib/auth-diagnostics.ts");
+    global.fetch = async (url, options) => { assert.equal(String(url), "https://project.example/auth/v1/settings"); assert.equal(options.headers.apikey, "public-test-key"); return Response.json({ external: { email: true }, disable_signup: false }); };
+    const ready = await inspectAccountConfiguration();
+    assert.deepEqual(ready, { available: true, configured: true, keyAccepted: true, emailEnabled: true, signupEnabled: true });
+    assert.equal(JSON.stringify(ready).includes("public-test-key"), false);
+    global.fetch = async () => new Response("Invalid API key", { status: 401 });
+    const invalid = await inspectAccountConfiguration(); assert.equal(invalid.available, false); assert.equal(invalid.keyAccepted, false);
+    global.fetch = async () => { throw new Error("network"); };
+    assert.equal((await inspectAccountConfiguration()).available, false);
+    delete process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    assert.deepEqual(await inspectAccountConfiguration(), { available: false });
+  } finally {
+    global.fetch = originalFetch;
+    for (const key of keys) { if (previous[key] === undefined) delete process.env[key]; else process.env[key] = previous[key]; }
+  }
+});
+
+test("email delivery restrictions explain the missing setup instead of looking like a broken form", () => {
+  const { accountEmailError } = load("lib/auth-diagnostics.ts");
+  assert.match(accountEmailError({ code: "email_address_not_authorized" }, "fallback"), /novos destinatarios/);
+  assert.match(accountEmailError({ status: 429 }, "fallback"), /Aguarde/);
+  assert.match(accountEmailError({ code: "signup_disabled" }, "fallback"), /desativado/);
+  assert.equal(accountEmailError({ code: "unknown" }, "fallback"), "fallback");
+});

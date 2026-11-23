@@ -66,8 +66,8 @@ export default function CampaignManager({ leads }: { leads: Lead[] }) {
     const query = encodeURIComponent(`${campaign.publico === "Pessoa fisica" ? "agencias de viagens" : campaign.publico} em ${campaign.regiao}`);
       return <article key={campaign.id} className="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3"><h3 className="text-xl font-black">{campaign.nome}</h3><button disabled={busy === campaign.id} onClick={() => toggle(campaign)} className="rounded-lg border px-4 py-2 disabled:opacity-50">{campaign.status === "ativa" ? "Pausar captacao" : "Reativar captacao"}</button></div>
-        <p className="mt-2 text-sm text-zinc-600">{campaign.publico} Â· {campaign.regiao} Â· {campaign.perfil} Â· {campaign.status}</p>
-        <p className="mt-4 font-bold">{captured.length} interessados Â· {converted} vendas informadas pela equipe Â· {captured.length ? Math.round(converted / captured.length * 100) : 0}% de conversao</p>
+        <p className="mt-2 text-sm text-zinc-600">{campaign.publico} | {campaign.regiao} | {campaign.perfil} | {campaign.status}</p>
+        <p className="mt-4 font-bold">{captured.length} interessados | {converted} vendas informadas pela equipe | {captured.length ? Math.round(converted / captured.length * 100) : 0}% de conversao</p>
         <div className="mt-5 grid gap-4">{campaign.canais.map(channel => {
           const link = `${origin}/r/${campaign.id}?fonte=${encodeURIComponent(channel)}`;
           const metric = metrics.find(item => item.campaign_id === campaign.id && item.fonte === channel);

@@ -728,7 +728,7 @@ function InicioView({
               </p>
               <h2 className="mt-2 text-2xl font-black">{prospecaoAtiva.produto}</h2>
               <p className="mt-2 text-sm leading-6 text-zinc-600">
-                {prospecaoAtiva.regiao} ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· {prospecaoAtiva.publico} ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· {prospecaoAtiva.perfil}
+                {prospecaoAtiva.regiao} | {prospecaoAtiva.publico} | {prospecaoAtiva.perfil}
               </p>
             </div>
             <button
@@ -901,7 +901,7 @@ function ProspectarView({
           <p className="text-sm font-bold text-[#9d1f16]">Resumo do plano</p>
           <h3 className="mt-2 text-2xl font-black">{prospecao.produto}</h3>
           <p className="mt-2 text-sm leading-6 text-zinc-600">
-            {prospecao.regiao} ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· {prospecao.publico} ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· {prospecao.perfil}
+            {prospecao.regiao} | {prospecao.publico} | {prospecao.perfil}
           </p>
           <p className="mt-5 text-sm text-zinc-600">Salvar cria uma campanha com links de captacao. A divulgacao nos canais deve ser realizada pela equipe. Consulte os resultados na aba Campanhas.</p>
           <div className="mt-5 grid gap-2 text-sm text-zinc-600">
@@ -1109,7 +1109,7 @@ function LeadCard({
           </p>
           <h3 className="mt-2 text-xl font-black">{lead.nome}</h3>
           <p className="mt-1 text-sm font-semibold text-zinc-700">
-            {lead.origem} ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ {lead.destino}
+            {lead.origem} para {lead.destino}
           </p>
         </div>
         <span className={`rounded-full px-3 py-1 text-xs font-black ${statusClass(lead.status)}`}>
@@ -1185,7 +1185,7 @@ function LeadDetailsModal({
             </p>
             <h2 className="mt-2 text-2xl font-black">{lead.nome}</h2>
             <p className="mt-1 text-sm font-semibold text-zinc-700">
-              {lead.origem} ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ {lead.destino}
+              {lead.origem} para {lead.destino}
             </p>
           </div>
           <button
@@ -1280,7 +1280,7 @@ function LeadMiniCard({
         <div>
           <h3 className="font-black">{lead.nome}</h3>
           <p className="mt-1 text-sm font-semibold text-zinc-700">
-            {lead.origem} ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ {lead.destino}
+            {lead.origem} para {lead.destino}
           </p>
         </div>
         <span className="text-xs font-black text-[#9d1f16]">{formatRelativeDate(lead.created_at)}</span>
@@ -1375,13 +1375,13 @@ function FunnelBar({
   value: number;
   total: number;
 }) {
-  const percentage = Math.round((value / total) * 100);
+  const percentage = total > 0 ? Math.min(100, Math.max(0, Math.round((value / total) * 100))) : 0;
 
   return (
     <div>
       <div className="mb-2 flex items-center justify-between gap-3 text-sm font-bold">
         <span>{label}</span>
-        <span className="text-zinc-500">{value} ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· {percentage}%</span>
+        <span className="text-zinc-500">{value} ({percentage}%)</span>
       </div>
       <div className="h-3 overflow-hidden rounded-full bg-zinc-200">
         <div className="h-full rounded-full bg-[#9d1f16]" style={{ width: `${percentage}%` }} />

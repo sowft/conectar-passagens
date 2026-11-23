@@ -1,5 +1,6 @@
 import { accountAuth, accountAuthConfigured, appOrigin, sameOriginAccountRequest, setAccountPreference } from "@/lib/account-auth";
 import { ACCOUNT_PASSWORD_MIN_LENGTH } from "@/lib/password-policy";
+import { accountEmailError } from "@/lib/auth-diagnostics";
 
 export async function POST(request: Request) {
   const headers = { "Cache-Control": "no-store, private" };
@@ -10,7 +11,7 @@ export async function POST(request: Request) {
   try {
     const client = await accountAuth(Boolean(body.remember));
     const { data, error } = await client.auth.signUp({ email: body.email.trim().toLowerCase(), password: body.password, options: { data: { nome: body.nome.trim() }, emailRedirectTo: `${appOrigin(request)}/auth/callback` } });
-    if (error) return Response.json({ error: error.status === 429 || error.code === "over_email_send_rate_limit" ? "Muitas tentativas. Aguarde alguns minutos antes de tentar novamente." : "Nao foi possivel cadastrar agora. Confira os dados ou tente recuperar sua senha." }, { status: 400, headers });
+    if (error) return Response.json({ error: accountEmailError(error, "Nao foi possivel cadastrar agora. Confira os dados ou tente recuperar sua senha.") }, { status: 400, headers });
     if (data.session) await setAccountPreference(Boolean(body.remember));
     return Response.json({ ok: true, requiresConfirmation: !data.session, message: "Confira seu e-mail para confirmar o cadastro e depois entre com sua senha." }, { status: 201, headers });
   } catch { return Response.json({ error: "Cadastro indisponivel no momento. Tente novamente mais tarde." }, { status: 503, headers }); }

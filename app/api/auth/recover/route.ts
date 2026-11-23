@@ -1,9 +1,10 @@
 import { recoveryConfiguration, recoveryMessage, requestPasswordRecovery, sameOriginJson } from "@/lib/password-recovery";
 import { accountAuth, accountAuthConfigured, appOrigin, sameOriginAccountRequest } from "@/lib/account-auth";
+import { accountEmailError, inspectAccountConfiguration } from "@/lib/auth-diagnostics";
 
 const headers = { "Cache-Control": "no-store" };
 export async function GET() {
-  return Response.json({ available: accountAuthConfigured() }, { headers });
+  return Response.json(await inspectAccountConfiguration(), { headers });
 }
 export async function POST(request: Request) {
   if (!sameOriginAccountRequest(request)) return Response.json({ error: "Solicitacao invalida. Abra a recuperacao pelo aplicativo." }, { status: 403, headers });
@@ -14,7 +15,7 @@ export async function POST(request: Request) {
     try {
       const client = await accountAuth();
       const { error } = await client.auth.resetPasswordForEmail(body.email.trim().toLowerCase(), { redirectTo: `${appOrigin(request)}/auth/callback?next=/redefinir-senha` });
-      if (error) return Response.json({ error: error.status === 429 || error.code === "over_email_send_rate_limit" ? "Muitas tentativas. Aguarde alguns minutos antes de tentar novamente." : "Nao foi possivel enviar agora. Tente novamente mais tarde." }, { status: 503, headers });
+      if (error) return Response.json({ error: accountEmailError(error, "Nao foi possivel enviar agora. Tente novamente mais tarde.") }, { status: 503, headers });
       return Response.json({ message: "Se houver uma conta com esse e-mail, voce recebera um link para redefinir sua senha. Confira tambem a caixa de spam." }, { headers });
     } catch { return Response.json({ error: "Nao foi possivel enviar agora. Tente novamente mais tarde." }, { status: 503, headers }); }
   }
