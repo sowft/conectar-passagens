@@ -1,5 +1,7 @@
 # Ativacao da prospeccao
 
+A area interna abre diretamente na aba Leads, com contatos reais persistidos no banco. Enquanto o aplicativo esta visivel, a lista consulta novas entradas a cada 20 segundos e ao voltar para a janela. O botao Atualizar lista permite consulta manual. Campanhas oferece os links por canal para formularios e anuncios.
+
 O endereco publico e reconhecido por `PUBLIC_APP_URL`, quando definido, ou pelas variaveis de sistema `VERCEL_PROJECT_PRODUCTION_URL` e `VERCEL_URL` fornecidas pela Vercel. A mesma resolucao e usada na verificacao de ativacao e nos links de autenticacao. Uma URL explicita invalida continua aparecendo como pendencia; o sistema nao considera localhost um endereco publico. Dominio proprio pode ser definido em `PUBLIC_APP_URL`.
 
 ## Contas individuais e recuperacao para qualquer e-mail
@@ -53,7 +55,7 @@ O botao de compra envia um POST a `/comprar`. Para entradas rastreadas, o encami
 
 Entradas representam acessos ao link: repeticoes e robos podem estar incluidos. Um HEAD nao cria entrada. O teste do link pelo painel cria uma entrada real e esta identificado na interface. Esses numeros nao sao pessoas unicas nem impressoes de anuncios. Encaminhamento nao e venda. O status convertido continua sendo uma informacao manual da equipe.
 
-O painel Inicio verifica credenciais, estrutura, consulta de metricas e presenca de endereco publico HTTPS. A aba Campanhas mostra entradas, interessados e encaminhamentos por canal. Use Atualizar para consultar novamente entradas/encaminhamentos; para interessados novos, atualize os leads ou recarregue a pagina. A verificacao tecnica nao testa disponibilidade externa, entrega de anuncios nem compras.
+O diagnostico tecnico em `/api/operation` verifica credenciais, estrutura, consulta de metricas e presenca de endereco publico HTTPS. Esse quadro foi retirado da tela comercial. A aba Campanhas mostra entradas, interessados e encaminhamentos por canal. Use Atualizar para consultar novamente entradas/encaminhamentos; para interessados novos, atualize os leads ou recarregue a pagina. A verificacao tecnica nao testa disponibilidade externa, entrega de anuncios nem compras.
 
 ## Comece por aqui
 

@@ -2,9 +2,8 @@
 
 import Link from "next/link";
 import CompanySearch from "@/components/CompanySearch";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import CampaignManager from "@/components/CampaignManager";
-import OperationStatus from "@/components/OperationStatus";
 import AppOpening from "@/components/AppOpening";
 import { ACCOUNT_PASSWORD_MIN_LENGTH } from "@/lib/password-policy";
 import {
@@ -45,9 +44,9 @@ const fontes = [
 ];
 
 const abas: Array<{ id: Aba; label: string; resumo: string }> = [
-  { id: "inicio", label: "Inicio", resumo: "Resumo comercial" },
+  { id: "oportunidades", label: "Leads", resumo: "Pessoas interessadas" },
+  { id: "inicio", label: "Resumo", resumo: "Resultados comerciais" },
   { id: "prospectar", label: "Prospectar", resumo: "Criar captacao" },
-  { id: "oportunidades", label: "Oportunidades", resumo: "Leads recebidos" },
   { id: "campanhas", label: "Campanhas", resumo: "Acoes de aquisicao" },
   { id: "funil", label: "Funil", resumo: "Etapas de venda" },
 ];
@@ -69,11 +68,14 @@ const filtrosIniciais: FiltrosOportunidades = {
 };
 
 export default function Home() {
-  const [aba, setAba] = useState<Aba>("inicio");
+  const [aba, setAba] = useState<Aba>("oportunidades");
   const [leads, setLeads] = useState<Lead[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [salvandoProspecao, setSalvandoProspecao] = useState(false);
   const [erro, setErro] = useState("");
+  const [erroLeads, setErroLeads] = useState("");
+  const [ultimaAtualizacao, setUltimaAtualizacao] = useState<string | null>(null);
+  const consultaLeads = useRef<AbortController | null>(null);
   const [autenticado, setAutenticado] = useState(false);
   const [carregandoSessao, setCarregandoSessao] = useState(true);
   const [aberturaConcluida, setAberturaConcluida] = useState(false);
@@ -106,24 +108,50 @@ export default function Home() {
     document.documentElement.classList.toggle("night-mode", novoValor);
   }
 
-  const carregarLeads = useCallback(async () => {
-    setCarregando(true);
-    setErro("");
+  const carregarLeads = useCallback(async (silencioso = false) => {
+    if (silencioso && consultaLeads.current) return;
+    consultaLeads.current?.abort();
+    const controller = new AbortController();
+    consultaLeads.current = controller;
+    const timeout = window.setTimeout(() => controller.abort(), 10000);
+    if (!silencioso) setCarregando(true);
 
     try {
-    const response = await fetch("/api/leads");
+    const response = await fetch("/api/leads", { cache: "no-store", signal: controller.signal });
     const data = (await response.json()) as { leads?: Lead[]; error?: string };
+    if (consultaLeads.current !== controller) return;
 
     if (!response.ok) {
-      setErro(data.error ?? "Nao foi possivel carregar os leads.");
-      setLeads([]);
+      setErroLeads(data.error ?? "Nao foi possivel carregar os leads.");
+      if (response.status === 401) { setLeads([]); setAutenticado(false); setErroLogin("Seu acesso expirou. Entre novamente."); }
     } else {
       setLeads(data.leads ?? []);
+      setErroLeads("");
+      setUltimaAtualizacao(new Date().toISOString());
     }
 
-    } catch { setErro("Falha de conexao ao carregar os leads."); }
-    finally { setCarregando(false); }
+    } catch {
+      if (consultaLeads.current === controller) setErroLeads("Nao foi possivel atualizar os contatos. Tente novamente.");
+    } finally {
+      window.clearTimeout(timeout);
+      if (consultaLeads.current === controller) { consultaLeads.current = null; setCarregando(false); }
+    }
   }, []);
+
+  useEffect(() => {
+    if (!autenticado) return;
+    const refresh = () => { if (document.visibilityState === "visible") void carregarLeads(true); };
+    const interval = window.setInterval(refresh, 20000);
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+      consultaLeads.current?.abort();
+      consultaLeads.current = null;
+    };
+  }, [autenticado, carregarLeads]);
 
   const verificarSessao = useCallback(async () => {
     try {
@@ -280,7 +308,7 @@ export default function Home() {
     window.localStorage.removeItem("conectar-lembrar-login");
     window.localStorage.removeItem("conectar-auth-local");
     window.localStorage.removeItem("conectar-email-login");
-    setAba("inicio");
+    setAba("oportunidades");
   }
 
   async function atualizarStatus(id: string, status: LeadStatus) {
@@ -577,14 +605,14 @@ export default function Home() {
         </aside>
 
         <section className="min-w-0 px-4 py-5 pb-24 sm:px-6 lg:px-8 lg:py-8">
-          {erro ? (
+          {erro || erroLeads ? (
             <div className="mb-5 rounded-lg border border-[#9d1f16]/25 bg-[#fff8cc] px-4 py-3 text-sm font-bold text-[#5a180f]">
-              {erro}
+              {erro || erroLeads}
             </div>
           ) : null}
 
           {aba === "inicio" ? (
-            <><OperationStatus /><InicioView
+            <InicioView
               leads={leads}
               carregando={carregando}
               metricas={metricas}
@@ -592,7 +620,7 @@ export default function Home() {
               taxaConversao={taxaConversao}
               prospecaoAtiva={prospecaoAtiva}
               setAba={setAba}
-            /></>
+            />
           ) : aba === "prospectar" ? (
             <><CompanySearch /><ProspectarView
               prospecao={prospecao}
@@ -610,7 +638,9 @@ export default function Home() {
               carregando={carregando}
               atualizarStatus={atualizarStatus}
               abrirLead={setLeadSelecionado}
-              recarregar={carregarLeads}
+              recarregar={() => void carregarLeads()}
+              ultimaAtualizacao={ultimaAtualizacao}
+              abrirCampanhas={() => setAba("campanhas")}
               limparFiltros={() => setFiltros(filtrosIniciais)}
               setFiltros={setFiltros}
             />
@@ -929,6 +959,8 @@ function OportunidadesView({
   atualizarStatus,
   abrirLead,
   recarregar,
+  ultimaAtualizacao,
+  abrirCampanhas,
   limparFiltros,
   setFiltros,
 }: {
@@ -940,6 +972,8 @@ function OportunidadesView({
   atualizarStatus: (id: string, status: LeadStatus) => void;
   abrirLead: (lead: Lead) => void;
   recarregar: () => void;
+  ultimaAtualizacao: string | null;
+  abrirCampanhas: () => void;
   limparFiltros: () => void;
   setFiltros: (filtros: FiltrosOportunidades) => void;
 }) {
@@ -947,13 +981,17 @@ function OportunidadesView({
     <div className="grid gap-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <PageTitle
-          eyebrow="Oportunidades"
-          title="Leads captados pelas fontes disponiveis."
-          description="Aqui entram pessoas que demonstraram interesse real no formulario publico ou em futuras integracoes."
+          eyebrow="Pessoas interessadas"
+          title="Leads recebidos"
+          description="Contatos enviados pelos formularios das suas campanhas. A lista e atualizada automaticamente a cada 20 segundos."
         />
         <button onClick={recarregar} className="rounded-lg border border-zinc-300 bg-white px-4 py-2.5 text-sm font-black">
-          Atualizar
+          Atualizar lista
         </button>
+      </div>
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-zinc-200 bg-white px-5 py-4">
+        <p className="text-sm text-zinc-600">{ultimaAtualizacao ? `Ultima atualizacao: ${new Date(ultimaAtualizacao).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}` : "Consultando os contatos recebidos..."}</p>
+        <button onClick={abrirCampanhas} className="text-sm font-bold text-[#9d1f16]">Copiar link de captacao</button>
       </div>
 
       <section className="rounded-lg bg-white p-5 shadow-sm">
@@ -1017,7 +1055,7 @@ function OportunidadesView({
       {carregando ? (
         <p className="rounded-lg bg-white p-5 text-sm font-bold text-zinc-600 shadow-sm">Carregando oportunidades...</p>
       ) : leads.length === 0 ? (
-        <EmptyLeads />
+        <EmptyLeads abrirCampanhas={abrirCampanhas} />
       ) : leadsFiltrados.length === 0 ? (
         <section className="rounded-lg border border-dashed border-zinc-300 bg-white p-6 shadow-sm">
           <h3 className="text-xl font-black">Nenhuma oportunidade encontrada.</h3>
@@ -1298,17 +1336,17 @@ function LeadMiniCard({
   );
 }
 
-function EmptyLeads() {
+function EmptyLeads({ abrirCampanhas }: { abrirCampanhas?: () => void } = {}) {
   return (
     <section className="rounded-lg border border-dashed border-[#9d1f16]/35 bg-white p-6 shadow-sm">
-      <h3 className="text-xl font-black">Nenhum lead real ainda.</h3>
+      <h3 className="text-xl font-black">Ainda nao chegaram contatos.</h3>
       <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-600">
-        Divulgue o formulario publico para captar o primeiro interessado. Quando alguem preencher,
-        ele aparecera automaticamente nesta tela.
+        Compartilhe o link de uma campanha no WhatsApp, Instagram ou nos seus anuncios.
+        Quando uma pessoa enviar o formulario, o contato aparecera aqui para atendimento.
       </p>
-      <Link href="/captacao" className="mt-5 inline-block rounded-lg bg-[#9d1f16] px-5 py-3 text-sm font-black text-white">
+      {abrirCampanhas ? <button onClick={abrirCampanhas} className="mt-5 rounded-lg bg-[#9d1f16] px-5 py-3 text-sm font-black text-white">Abrir links de captacao</button> : <Link href="/captacao" className="mt-5 inline-block rounded-lg bg-[#9d1f16] px-5 py-3 text-sm font-black text-white">
         Abrir formulario de captacao
-      </Link>
+      </Link>}
     </section>
   );
 }
