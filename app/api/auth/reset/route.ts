@@ -1,5 +1,6 @@
 import { resetAdminPassword, sameOriginJson } from "@/lib/password-recovery";
 import { accountAuth, clearAccountCookies, sameOriginAccountRequest } from "@/lib/account-auth";
+import { ACCOUNT_PASSWORD_MIN_LENGTH } from "@/lib/password-policy";
 
 export async function GET() {
   try {
@@ -13,7 +14,7 @@ export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
   if (body?.mode === "account") {
     if (!sameOriginAccountRequest(request)) return Response.json({ error: "Solicitacao invalida." }, { status: 403, headers });
-    if (typeof body.password !== "string" || body.password.length < 12 || body.password.length > 256) return Response.json({ error: "Use uma senha entre 12 e 256 caracteres." }, { status: 400, headers });
+    if (typeof body.password !== "string" || body.password.length < ACCOUNT_PASSWORD_MIN_LENGTH || body.password.length > 256) return Response.json({ error: `Use uma senha entre ${ACCOUNT_PASSWORD_MIN_LENGTH} e 256 caracteres.` }, { status: 400, headers });
     try {
       const client = await accountAuth();
       const { data, error } = await client.auth.getUser();

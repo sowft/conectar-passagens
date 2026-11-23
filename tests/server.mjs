@@ -369,11 +369,13 @@ test("public signup accepts independent email addresses and waits for confirmati
     accountAuth: async () => ({ auth: { signUp: async input => { registrations.push(input); return { data: { session: null }, error: null }; } } }),
   } });
   for (const email of ["Pessoa@exemplo.com", "julio@outra-empresa.com"]) {
-    const response = await route.POST(authRequest("/api/auth/register", { nome: "Contato", email, password: "account-test-password" }));
+    const response = await route.POST(authRequest("/api/auth/register", { nome: "Contato", email, password: "Abc123" }));
     assert.equal(response.status, 201); assert.equal((await response.json()).requiresConfirmation, true);
   }
   assert.deepEqual(registrations.map(r => r.email), ["pessoa@exemplo.com", "julio@outra-empresa.com"]);
   assert.equal(preferences, 0);
+  assert.equal(registrations[0].password, "Abc123");
+  assert.equal((await route.POST(authRequest("/api/auth/register", { nome: "Contato", email: "pessoa@exemplo.com", password: "short" }))).status, 400);
   assert.equal((await route.POST(authRequest("/api/auth/register", { nome: "Contato", email: "invalid", password: "short" }))).status, 400);
   assert.equal((await route.POST(authRequest("/api/auth/register", {}, "https://evil.example"))).status, 403);
   assert.equal(registrations.length, 2);
@@ -417,10 +419,12 @@ test("account password reset changes only the server-verified user's password", 
       signOut: async input => { signouts.push(input); return { error: null }; },
     } }),
   } });
-  const request = () => authRequest("/api/auth/reset", { mode: "account", password: "new-account-password", email: "someone-else@example.com", id: "someone-else" });
+  const request = () => authRequest("/api/auth/reset", { mode: "account", password: "Abc123", email: "someone-else@example.com", id: "someone-else" });
   assert.equal((await route.POST(request())).status, 401); assert.equal(updated.length, 0);
-  loggedIn = true; assert.equal((await route.POST(request())).status, 200);
-  assert.deepEqual(updated, [{ password: "new-account-password" }]); assert.deepEqual(signouts, [{ scope: "global" }]); assert.equal(cleared, 1);
+  loggedIn = true;
+  assert.equal((await route.POST(authRequest("/api/auth/reset", { mode: "account", password: "short" }))).status, 400);
+  assert.equal((await route.POST(request())).status, 200);
+  assert.deepEqual(updated, [{ password: "Abc123" }]); assert.deepEqual(signouts, [{ scope: "global" }]); assert.equal(cleared, 1);
 });
 
 test("individual database access always uses the verified user's RLS client", async () => {

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { ACCOUNT_PASSWORD_MIN_LENGTH } from "@/lib/password-policy";
 
 export default function ResetPasswordPage() {
   const [token, setToken] = useState<string | null>(null);
@@ -10,6 +11,7 @@ export default function ResetPasswordPage() {
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
   const [error, setError] = useState("");
+  const minimumLength = token === "account" ? ACCOUNT_PASSWORD_MIN_LENGTH : 12;
   useEffect(() => {
     const timer = window.setTimeout(() => {
       const value = new URLSearchParams(window.location.hash.slice(1)).get("token") ?? "";
@@ -41,9 +43,9 @@ export default function ResetPasswordPage() {
       <Link href="/" className="font-bold text-[#9d1f16]">Conectar Passagens</Link>
       <h1 className="mt-6 text-2xl font-black">Definir nova senha</h1>
       {done ? <div role="status"><p className="mt-4 leading-7">Senha atualizada. Entre novamente com seu e-mail e a nova senha. Se voce recuperou o acesso administrativo, deixe o e-mail vazio.</p><Link href="/" className="mt-6 inline-block rounded-lg bg-[#9d1f16] px-5 py-3 font-bold text-white">Entrar</Link></div> : token === null ? <p className="mt-5">Verificando link...</p> : !token ? <p className="mt-5 leading-7">Abra o link completo recebido por e-mail ou <Link href="/recuperar-senha" className="font-bold text-[#9d1f16]">solicite outro link</Link>.</p> : <form onSubmit={submit} className="mt-6 grid gap-4">
-        <label className="grid gap-2 font-bold">Nova senha<input type="password" autoComplete="new-password" minLength={12} maxLength={256} required value={password} onChange={event => setPassword(event.target.value)} className="rounded-lg border border-zinc-300 px-4 py-3 font-normal" /></label>
-        <p className="text-sm text-zinc-600">Use pelo menos 12 caracteres.</p>
-        <label className="grid gap-2 font-bold">Confirmar nova senha<input type="password" autoComplete="new-password" minLength={12} maxLength={256} required value={confirmation} onChange={event => setConfirmation(event.target.value)} className="rounded-lg border border-zinc-300 px-4 py-3 font-normal" /></label>
+        <label className="grid gap-2 font-bold">Nova senha<input type="password" autoComplete="new-password" minLength={minimumLength} maxLength={256} required value={password} onChange={event => setPassword(event.target.value)} className="rounded-lg border border-zinc-300 px-4 py-3 font-normal" /></label>
+        <p className="text-sm text-zinc-600">Use pelo menos {minimumLength} caracteres.</p>
+        <label className="grid gap-2 font-bold">Confirmar nova senha<input type="password" autoComplete="new-password" minLength={minimumLength} maxLength={256} required value={confirmation} onChange={event => setConfirmation(event.target.value)} className="rounded-lg border border-zinc-300 px-4 py-3 font-normal" /></label>
         <button disabled={busy} className="rounded-lg bg-[#9d1f16] px-5 py-3 font-bold text-white disabled:opacity-60">{busy ? "Salvando..." : "Salvar nova senha"}</button>
       </form>}
       {error && <p role="alert" className="mt-4 rounded-lg bg-amber-50 p-4 text-amber-950">{error}</p>}

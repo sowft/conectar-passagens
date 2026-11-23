@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import CampaignManager from "@/components/CampaignManager";
 import OperationStatus from "@/components/OperationStatus";
 import AppOpening from "@/components/AppOpening";
+import { ACCOUNT_PASSWORD_MIN_LENGTH } from "@/lib/password-policy";
 import {
   Lead,
   LeadStatus,
@@ -474,8 +475,8 @@ export default function Home() {
               value={senha}
               onChange={(event) => setSenha(event.target.value)}
               className="rounded-lg border border-zinc-300 px-4 py-3 text-sm font-semibold outline-none focus:border-[#9d1f16] focus:ring-2 focus:ring-[#f3c400]/40"
-              placeholder={modoAcesso === "login" ? "Digite a senha" : "Minimo 12 caracteres"}
-              minLength={modoAcesso === "cadastro" ? 12 : undefined}
+              placeholder={modoAcesso === "login" ? "Digite a senha" : `Minimo ${ACCOUNT_PASSWORD_MIN_LENGTH} caracteres`}
+              minLength={modoAcesso === "cadastro" ? ACCOUNT_PASSWORD_MIN_LENGTH : undefined}
               maxLength={256}
               autoComplete={modoAcesso === "cadastro" ? "new-password" : "current-password"}
               required

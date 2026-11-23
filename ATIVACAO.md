@@ -2,6 +2,8 @@
 
 ## Contas individuais e recuperacao para qualquer e-mail
 
+O cadastro e a redefinicao de contas individuais aceitam senhas a partir de 6 caracteres. A politica de senha do Supabase tambem precisa permitir esse minimo. O acesso administrativo original mantem sua configuracao separada.
+
 A tela inicial oferece Entrar e Criar conta. Qualquer pessoa pode informar seu proprio e-mail, cadastrar uma senha e confirmar o endereco. Esqueci minha senha aceita qualquer e-mail valido e encaminha a recuperacao ao Supabase Auth. A resposta nao revela se a conta existe. Cada conta ve apenas suas campanhas e os contatos vinculados a elas. Os dados antigos sem proprietario continuam restritos ao administrador original, que entra com e-mail vazio.
 
 Para ativar na hospedagem:
